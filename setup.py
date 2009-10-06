@@ -35,11 +35,13 @@ setup(
     install_requires=['couchdb',
                       'carrot>=0.6',
                       'eventlet>=0.9',
+                      'giblets',
                       'greenamqp',
                       'httplib2<0.5',
                       'melk.util',
                       'simplejson',
-                      'PyYAML'
+                      'PyYAML',
+                      'WebOb'
     ],
     dependency_links=[
     ],
