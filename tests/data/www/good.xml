@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>http://example.org/feeds/0</id>
+  <title>A Feeds</title>
+
+  <link rel="self" href="http://example.org/feeds/0" />
+  <updated>2009-09-09T09:09:09Z</updated>
+  <author>
+    <name>Some Dude</name>
+  </author>
+  
+  <entry>
+    <id>http://example.org/items/1</id>
+    <title>Item 1</title>
+    <link rel="alternate" href="http://example.org/blog/1"/>
+    <author><name>Some Dude</name></author>
+    <updated>2009-09-09T09:09:09Z</updated>
+    <summary>Some Stuff</summary>
+  </entry>  
+
+  <entry>
+    <id>http://example.org/items/2</id>
+    <title>Item 2</title>
+    <link rel="alternate" href="http://example.org/blog/2"/>
+    <author><name>Some Dude</name></author>
+    <updated>2009-09-08T09:09:09Z</updated>
+    <summary>Some Stuff</summary>
+  </entry>  
+</feed>
+  

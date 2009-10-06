@@ -1,0 +1,11 @@
+Melkman is a feed aggregating, sorting and filtering 
+engine based on CouchDB, RabbitMQ and eventlet.
+
+This is mostly a pre-alpha work-in-progress at the moment.
+
+Requirements: 
+
+Python
+CouchDB  - http://couchdb.apache.org/
+RabbitMQ - http://www.rabbitmq.com/
+ 
