@@ -26,7 +26,12 @@ def index_feed_push(url, content, context, **kw):
     updated_docs = []
     if feed is None:
         feed = RemoteFeed.create_from_url(url)
-    
+
+    if 'from_hub' in kw and kw['from_hub'] == True:
+        if not feed.hub_info.enabled:
+            log.warn("Ignoring hub push for unsubscribed feed.")
+            return
+        
     if 'digest' in kw:
         if not _digest_matches(kw['digest'], content, feed.hub_info.secret):
             log.warn("Rejecting content push: digest (%s) did not match!" % kw['digest'])
@@ -202,4 +207,6 @@ class FeedIndexer(FeedIndexerConsumer):
         kw = {}
         if 'digest' in message_data:
             kw['digest'] = message_data['digest']
+        if 'from_hub' in message_data:
+            kw['from_hub'] = message_data['from_hub']
         index_feed_push(url, content, self.context, **kw)
