@@ -2,16 +2,20 @@ from melkman.green import green_init, GreenContext
 green_init()
 
 from datetime import datetime, timedelta
+from eventlet.api import tcp_listener
+from eventlet.wsgi import server as wsgi_server
 import os
 import time
+from webob import Request, Response
 
 from melk.util.dibject import Dibject, dibjectify
 from melk.util.hash import melk_id    
 from melk.util.nonce import nonce_str
 
+
 __all__ = ['make_db', 'fresh_context', 'data_path', 'test_ini_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
-           'no_micro']
+           'no_micro', 'FileServer']
 
 
 def data_path():
@@ -129,6 +133,41 @@ def dummy_news_item(d):
     di.setdefault('details', Dibject())
 
     return di
+
+class FileServer(object):
+    """
+    little file server for testing
+    """
+
+    TEST_PORT = 9292
+
+    def __init__(self, www_dir):
+        self.requests = 0
+        self.www_dir = os.path.abspath(www_dir)
+
+    def run(self):
+        wsgi_server(tcp_listener(('127.0.0.1', self.TEST_PORT)), self)
+
+    def url_for(self, path):
+        return 'http://localhost:%d/%s' % (self.TEST_PORT, path)
+
+    def __call__(self, environ, start_response):
+        self.requests += 1
+        req = Request(environ)
+        res = Response()
+
+        filename = req.path_info
+        while filename.startswith('/'):
+            filename = filename[1:]
+        filename = os.path.abspath(os.path.join(self.www_dir, filename))
+
+        if filename.startswith(self.www_dir) and os.path.isfile(filename):
+            res.status = 200
+            res.body = open(filename).read()
+        else:
+            res.status = 404
+
+        return res(environ, start_response)
 
 def epeq_datetime(t1, t2):
     return abs(t1 - t2) < timedelta(seconds=1)
