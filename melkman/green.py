@@ -85,7 +85,7 @@ def resilient_consumer_loop(make_consumer, context):
     seq_reconnects = 0
     total_reconnects = 0
     dead = False
-    while(True):
+    while True:
         try:
             consumer = make_consumer(context)
             it = consumer.iterconsume()

@@ -155,9 +155,7 @@ class FileServer(object):
         req = Request(environ)
         res = Response()
 
-        filename = req.path_info
-        while filename.startswith('/'):
-            filename = filename[1:]
+        filename = req.path_info.lstrip('/')
         filename = os.path.abspath(os.path.join(self.www_dir, filename))
 
         if filename.startswith(self.www_dir) and os.path.isfile(filename):
