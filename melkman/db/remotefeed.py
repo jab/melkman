@@ -48,6 +48,13 @@ class HistoryItem(Schema):
     reason = TextField(default='')
     method = TextField(default='')
 
+class HubInfo(Schema):
+    hub_url = TextField()
+    verify_token = TextField(default='')
+    secret = TextField(default='')
+    enabled = BooleanField(default=False)
+
+
 MAX_HISTORY = 10
 class RemoteFeed(NewsBucket):
     """
@@ -69,12 +76,8 @@ class RemoteFeed(NewsBucket):
     poll_in_progress = BooleanField(default=False)
     poll_start_time = DateTimeField()
 
-    # pubsubhub info
-    hub_info = DictField(Schema.build(
-        url = TextField(),
-        subscribed = BooleanField(default=False),
-        next_lease_time = DateTimeField(),
-    ))
+    # pubsubhubbub info
+    hub_info = DictField(HubInfo)
     
     update_history = ListField(DictField(schema=HistoryItem))
 
