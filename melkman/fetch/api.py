@@ -86,7 +86,7 @@ def push_feed_index(url, content, context, **kw):
 class FeedIndexerSetup(Component):
     implements(IRunDuringBootstrap)
     
-    def bootstrap(sself, context, purge=False):
+    def bootstrap(self, context, purge=False):
 
         log.info("Setting up feed indexing queues...")
         c = FeedIndexerConsumer(context.broker)
