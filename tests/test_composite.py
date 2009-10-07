@@ -87,20 +87,20 @@ def test_composite_filtered_update():
     ctx = fresh_context()
     cc = Composite()
     # a filter stack that accepts only things with the 
-    # word tortise in the title, or is tagged tortise
+    # word tortoise in the title, or is tagged tortoise
     cc.filters.append({'op': 'match_title',
-                       'config': {'values': ['tortise'],
+                       'config': {'values': ['tortoise'],
                                   'match_type': 'substring'},
                        'action': 'accept'})
     cc.filters.append({'op': 'match_tag',
-                      'config': {'values': ['tortise']},
+                      'config': {'values': ['tortoise']},
                       'action': 'accept'})
     cc.filters.append({'op': 'match_all',
                        'config': {},
                        'action': 'reject'})
     
-    ok_items = [dummy_news_item({'title': "The Tortise and the O'Hare"}),
-                dummy_news_item({'details': {'tags': [{'label': 'tortise'}, {'label': 'shells'}]}})]
+    ok_items = [dummy_news_item({'title': "The tortoise and the O'Hare"}),
+                dummy_news_item({'details': {'tags': [{'label': 'tortoise'}, {'label': 'shells'}]}})]
     
     not_ok_items = [dummy_news_item({'title': 'Jellybirds'}),
                     dummy_news_item({'details': {'tags': [{'label': 'hare'}, {'label': 'shells'}]}})]

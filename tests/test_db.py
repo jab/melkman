@@ -40,11 +40,10 @@ def test_delete_all_in_view():
     for i in range(10):
         doc_id = 'doc_%d' % i
         if i % 2 == 0:
-            assert doc_id in db, i
+            assert doc_id in db, 'expected %s in db' % doc_id
         else:
-            assert not doc_id in db, i
-            assert 'doc_%'
-            
+            assert doc_id not in db, 'expected %s not in db' % doc_id
+
 from decimal import Decimal
 import doctest
 import os
@@ -85,13 +84,7 @@ class MappingFieldTestCase(unittest.TestCase):
         thing.stuff[Decimal('1.0')] = Decimal('2.0')
 
         assert Decimal('1.0') in thing.stuff
-
-        try:
-            del thing.stuff[Decimal('2.0')]
-            assert 0, 'Expected KeyError'
-        except KeyError:
-            pass
-
+        self.assertRaises(KeyError, lambda: thing.stuff.__delitem__(Decimal('2.0')))
         del thing.stuff[Decimal('1.0')]
 
         assert Decimal('1.0') not in thing.stuff
@@ -123,12 +116,7 @@ class MappingFieldTestCase(unittest.TestCase):
         thing.stuff[Decimal('1.0')] = Decimal('2.0')
 
         assert thing.stuff[Decimal('1.0')] == Decimal('2.0')
-
-        try:
-            thing.stuff[Decimal('2.0')]
-            assert 0, 'Expected KeyError'
-        except KeyError:
-            pass
+        self.assertRaises(KeyError, lambda: thing.stuff[Decimal('2.0')])
 
     def test_proxy_set_item(self):
         class Thing(schema.Document):
@@ -138,17 +126,8 @@ class MappingFieldTestCase(unittest.TestCase):
         thing.stuff[1.0] = 2.0
         assert thing.stuff[1.0] == 2.0
 
-        try:
-            thing.stuff['zztop'] = 5.0
-            assert 0, 'Expected ValueError'
-        except ValueError:
-            pass
-
-        try:
-            thing.stuff[6.0]='zztop'
-            assert 0, 'Expected ValueError'
-        except ValueError:
-            pass
+        self.assertRaises(ValueError, lambda: thing.stuff.__setitem__('zztop', 5.0))
+        self.assertRaises(ValueError, lambda: thing.stuff.__setitem__(6.0, 'zztop'))
 
 
     def test_proxy_clear(self):
@@ -219,11 +198,11 @@ class MappingFieldTestCase(unittest.TestCase):
 
         got_items = set()
         for i in thing.stuff.items():
-          assert i in expected_items
-          got_items.add(i)
+            assert i in expected_items
+            got_items.add(i)
 
         for i in expected_items:
-          assert i in got_items
+            assert i in got_items
 
     def test_proxy_iteritems(self):
         class Thing(schema.Document):
@@ -238,11 +217,11 @@ class MappingFieldTestCase(unittest.TestCase):
 
         got_items = set()
         for i in thing.stuff.items():
-          assert i in expected_items
-          got_items.add(i)
+            assert i in expected_items
+            got_items.add(i)
 
         for i in expected_items:
-          assert i in got_items
+            assert i in got_items
 
     def test_proxy_iterkeys(self):
         class Thing(schema.Document):
@@ -294,7 +273,7 @@ class MappingFieldTestCase(unittest.TestCase):
         thing.stuff[Decimal('3.0')] = Decimal('4.0')
 
         # check default return
-        thing.stuff.pop(Decimal('9.0'), 'elephant') == 'elephant'
+        assert thing.stuff.pop(Decimal('9.0'), 'elephant') == 'elephant'
         # with no default, it raises KeyError
         self.assertRaises(KeyError, thing.stuff.pop, Decimal('9.0'))
 
