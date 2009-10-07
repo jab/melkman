@@ -6,6 +6,8 @@ from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
 import os
 import time
+from urlparse import urlsplit
+from urllib import quote_plus
 from webob import Request, Response
 
 from melk.util.dibject import Dibject, dibjectify
@@ -15,7 +17,7 @@ from melk.util.nonce import nonce_str
 
 __all__ = ['make_db', 'fresh_context', 'data_path', 'test_ini_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
-           'no_micro', 'FileServer']
+           'append_param', 'no_micro', 'TestHTTPServer', 'FileServer']
 
 
 def data_path():
@@ -51,11 +53,11 @@ def melk_ids_in(content, url):
     fp = parse_feed(content, url)
     return [x.melk_id for x in fp.entries]
 
-def random_atom_feed(feed_id, nentries, base_timestamp=None):
+def random_atom_feed(feed_id, nentries, base_timestamp=None, **kw):
     if base_timestamp is None:
         base_timestamp = datetime.utcnow()
     entries = dummy_atom_entries(nentries, base_timestamp)
-    return make_atom_feed(feed_id, entries, timestamp=base_timestamp + timedelta(seconds=nentries))
+    return make_atom_feed(feed_id, entries, timestamp=base_timestamp + timedelta(seconds=nentries), **kw)
 
 def make_atom_feed(feed_id, entries,
                     title='Some Dummy Feed',
@@ -134,18 +136,28 @@ def dummy_news_item(d):
 
     return di
 
-class FileServer(object):
+class TestHTTPServer(object):
+
+    def __init__(self, port=9291):
+        self.port = port
+
+    def run(self):
+        wsgi_server(tcp_listener(('127.0.0.1', self.port)), self)
+
+    def __call__(self, environ, start_response):
+        res = Response()
+        res.status = 404
+        return res
+
+class FileServer(TestHTTPServer):
     """
     little file server for testing
     """
 
     def __init__(self, www_dir, port=9292):
+        TestHTTPServer.__init__(self, port)
         self.requests = 0
-        self.port = port
         self.www_dir = os.path.abspath(www_dir)
-
-    def run(self):
-        wsgi_server(tcp_listener(('127.0.0.1', self.port)), self)
 
     def url_for(self, path):
         return 'http://localhost:%d/%s' % (self.port, path)
@@ -171,3 +183,9 @@ def epeq_datetime(t1, t2):
 
 def no_micro(dt):
     return dt.replace(microsecond=0)
+    
+def append_param(url, k, v):
+    if len(urlsplit(url)[3]) > 0:
+        return '%s&%s=%s' % (url, quote_plus(k), quote_plus(v))
+    else: 
+        return '%s?%s=%s' % (url, quote_plus(k), quote_plus(v))
