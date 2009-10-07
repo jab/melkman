@@ -41,7 +41,7 @@ def test_deferred_in_database():
         assert message.timestamp == when
     assert count == 1
 
-def test_deferred_send_recieve():
+def test_deferred_send_receive():
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
     from eventlet.api import sleep
