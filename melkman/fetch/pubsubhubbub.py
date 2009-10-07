@@ -23,17 +23,24 @@ def topic_url_for(feed):
             return link.href
     return None
 
-def make_sub_request(feed, context):
+def hubbub_sub(feed, context, hub_url=None):
     topic_url = topic_url_for(feed)
     
     if topic_url is None:
         raise ValueError('No self link found in feed, cannot subscribe via pubsubhubub.')
 
-    if feed.hub_info.enabled == False:
-        feed.hub_info.enabled = True
-        feed.hub_info.verify_token = nonce_str()
-        feed.hub_info.secret = nonce_str()
-        feed.save(context)
+    if hub_url is None:
+        hub_urls = feed.find_hub_urls()
+        if len(hub_urls) == 0:
+            raise ValueError("Cannot subscribe, no hubs were specified.")
+        hub_url = hub_urls[0]
+        log.warn("Guessing hub %s for %s" % (hub_url, feed.url))
+
+    feed.hub_info.enabled = True
+    feed.hub_info.hub_url = hub_url
+    feed.hub_info.verify_token = nonce_str()
+    feed.hub_info.secret = nonce_str()
+    feed.save(context)
 
     cb = callback_url_for(feed.url, context)
     req = {
@@ -48,8 +55,8 @@ def make_sub_request(feed, context):
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
-    
-def make_unsub_request(feed, context):
+        
+def hubbub_unsub(feed, context):
 
     topic_url = topic_url_for(feed)
     
