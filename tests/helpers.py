@@ -139,17 +139,16 @@ class FileServer(object):
     little file server for testing
     """
 
-    TEST_PORT = 9292
-
-    def __init__(self, www_dir):
+    def __init__(self, www_dir, port=9292):
         self.requests = 0
+        self.port = port
         self.www_dir = os.path.abspath(www_dir)
 
     def run(self):
-        wsgi_server(tcp_listener(('127.0.0.1', self.TEST_PORT)), self)
+        wsgi_server(tcp_listener(('127.0.0.1', self.port)), self)
 
     def url_for(self, path):
-        return 'http://localhost:%d/%s' % (self.TEST_PORT, path)
+        return 'http://localhost:%d/%s' % (self.port, path)
 
     def __call__(self, environ, start_response):
         self.requests += 1
