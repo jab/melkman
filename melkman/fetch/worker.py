@@ -191,13 +191,13 @@ class FeedIndexer(FeedIndexerConsumer):
             log.debug("completed handling message.")
 
     def handle_poll(self, url, message_data, message):
-        log.info('Recieved poll index request for %s' % url)
+        log.info('Received poll index request for %s' % url)
         reschedule = not message_data.get('skip_reschedule', False)
         http_cache = self.context.config.get('http', {}).get('cache', None)
         index_feed_polling(url, self.context, http_cache=http_cache, reschedule=reschedule)
     
     def handle_push(self, url, message_data, message):
-        log.info('Recieved push index request for %s' % url)
+        log.info('Received push index request for %s' % url)
         content = message_data['content']
         kw = {}
         if 'digest' in message_data:
