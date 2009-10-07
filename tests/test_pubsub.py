@@ -194,8 +194,8 @@ def test_sub_to_hub():
     from melkman.fetch.worker import FeedIndexer
     from melkman.fetch.pubsubhubbub import WSGISubClient
     from melkman.fetch.pubsubhubbub import callback_url_for
-    from melkman.fetch.pubsubhubbub import make_sub_request
-    from melkman.fetch.pubsubhubbub import make_unsub_request
+    from melkman.fetch.pubsubhubbub import hubbub_sub
+    from melkman.fetch.pubsubhubbub import hubbub_unsub
 
     
     import logging
@@ -289,14 +289,14 @@ def test_sub_to_hub():
     
     feed_url = 'http://example.org/feeds/99'
     rf = RemoteFeed.create_from_url(feed_url)
-    rf.feed_info = {'links': [{'rel': 'self', 'href': feed_url}]}
-    rf.hub_info.hub_url = hub_url
+    rf.feed_info = {'links': [{'rel': 'self', 'href': feed_url},
+                              {'rel': 'hub', 'href': hub_url}]}
     rf.save(ctx)
     
     cb = callback_url_for(feed_url, ctx)
     
     assert not hub.is_verified(cb, feed_url)
-    r, c = make_sub_request(rf, ctx)
+    r, c = hubbub_sub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
     sleep(.2)
     assert hub.is_verified(cb, feed_url)
@@ -320,7 +320,7 @@ def test_sub_to_hub():
         assert iid in rf.entries
     
     # unsub
-    r, c = make_unsub_request(rf, ctx)
+    r, c = hubbub_unsub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
     sleep(.2)
     assert not hub.is_verified(cb, feed_url)
