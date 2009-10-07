@@ -27,8 +27,9 @@ from giblets import Component, implements
 from melkman.context import IRunDuringBootstrap
 from melkman.scheduler import defer_message
 
-__all__ = ['request_feed_index', 'schedule_feed_index', 
-           'FeedIndexerConsumer', 'FeedIndexerPublisher']
+__all__ = ['request_feed_index', 'schedule_feed_index',
+           'push_feed_index', 'FeedIndexerConsumer',
+           'FeedIndexerPublisher']
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +71,22 @@ def schedule_feed_index(url, timestamp, context, message_id=None, skip_reschedul
     defer_message(timestamp, message, INDEX_FEED_QUEUE, INDEX_FEED_EXCHANGE, context, **options)
 
 
+def push_feed_index(url, content, context, **kw):
+    message = {
+        'url': url,
+        'content': content
+    }
+    message.update(kw)
+
+    publisher = FeedIndexerPublisher(context.broker)
+    publisher.send(message)
+    publisher.close()
+
+
 class FeedIndexerSetup(Component):
     implements(IRunDuringBootstrap)
     
-    def bootstrap(self, context, purge=False):
+    def bootstrap(sself, context, purge=False):
 
         log.info("Setting up feed indexing queues...")
         c = FeedIndexerConsumer(context.broker)
