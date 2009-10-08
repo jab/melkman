@@ -1,41 +1,62 @@
 from datetime import datetime, timedelta
+from giblets import Component, ExtensionPoint, implements
 from eventlet.api import spawn
 from httplib2 import Http
 import logging
 import traceback
-try:
-    from hashlib import sha1 # python > 2.5
-except ImportError:
-    from sha import new as sha1 # python <= 2.5
-
 
 from melkman.db import RemoteFeed
 from melkman.fetch.api import schedule_feed_index, FeedIndexerConsumer
+from melkman.fetch.api import PostIndexAction, IndexRequestFilter
 
 __all__ = ['FeedIndexer', 'index_feed_polling']
 
 log = logging.getLogger(__name__)
 
+
+class IndexerPlugins(Component):
+    
+    request_filters = ExtensionPoint(IndexRequestFilter)
+    post_index = ExtensionPoint(PostIndexAction)
+    
+    def accepts_request(self, feed, request, context):
+        for filt in self.request_filters:
+            if not filt.accepts_request(feed, request, context):
+                return False
+        return True
+    
+    def feed_reindexed(self, feed, context):
+        for action in self.post_index:
+            try:
+                action.feed_reindexed(feed, context)
+            except:
+                log.error("Error running post-update hook: %s" % traceback.format_exc())
+
+def run_post_index_hooks(feed, context):
+    hooks = IndexerPlugins(context.component_manager)
+    hooks.feed_reindexed(feed, context)
+
+def check_request_approved(feed, request_info, context):
+    hooks = IndexerPlugins(context.component_manager)
+    return hooks.accepts_request(feed, request_info, context)
+    
 ###############################
 # pushing update
 ###############################
 METHOD_PUSH = 'push'
-def index_feed_push(url, content, context, **kw):
+def index_feed_push(url, content, context, request_info=None):
+    if request_info is None:
+        request_info = {}
+
     feed = RemoteFeed.lookup_by_url(context.db, url)
 
     updated_docs = []
     if feed is None:
         feed = RemoteFeed.create_from_url(url)
 
-    if 'from_hub' in kw and kw['from_hub'] == True:
-        if not feed.hub_info.enabled:
-            log.warn("Ignoring hub push for unsubscribed feed.")
-            return
-        
-    if 'digest' in kw:
-        if not _digest_matches(kw['digest'], content, feed.hub_info.secret):
-            log.warn("Rejecting content push: digest (%s) did not match!" % kw['digest'])
-            return
+    if check_request_approved(feed, request_info, context) == False:
+        log.warn("Rejected index request for %s" % url)
+        return 
 
     # 200 status code, not from cache, do update...
     updated_docs += feed.update_from_feed(content, context.db, method=METHOD_PUSH)
@@ -50,41 +71,38 @@ def index_feed_push(url, content, context, **kw):
     log.info("Updated feed %s success: %s, %d new items" % 
       (feed.url, feed.update_history[0].success, feed.update_history[0].updates))
 
-def _digest_matches(digest, content, secret):
-    
-    if not secret or not digest or not content:
-        return False
-    
-    if not digest.startswith("sha1="):
-        return False
-        
-    digest = digest[5:]
+    run_post_index_hooks(feed, context)
 
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    
-    return hasher.hexdigest() == digest
 
 ###############################
 # polling update
 ###############################
 METHOD_POLL = 'poll'
-def index_feed_polling(url, context, http_cache=None, timeout=15, reschedule=False):
+def index_feed_polling(url, context, timeout=15, request_info=None):
     """
     poll the feed at the url given and index it immediately on 
     the calling thread. 
     """
+    if request_info is None:
+        request_info = {}
+
+    feed = RemoteFeed.lookup_by_url(context.db, url)
+    if feed is None:
+        feed = RemoteFeed.create_from_url(url)
+
+    if check_request_approved(feed, request_info, context) == False:
+        log.warn("Rejected index request for %s" % url)
+        return
+
+    reschedule = not request_info.get('skip_reschedule', False)
+    http_cache = context.config.get('http', {}).get('cache', None)
+
     # fetch
     http = Http(cache=http_cache, timeout=timeout)
     http.force_exception_to_status_code = True
     response, content = http.request(url, 'GET')
 
     updated_docs = []
-    feed = RemoteFeed.lookup_by_url(context.db, url)
-    if feed is None:
-        feed = RemoteFeed.create_from_url(url)
-
     if response.fromcache:
         feed.record_update_info(success=True, updates=0, method=METHOD_POLL)
     elif response.status != 200:
@@ -115,6 +133,9 @@ def index_feed_polling(url, context, http_cache=None, timeout=15, reschedule=Fal
     if reschedule:
         message_id = 'periodic_index_%s' % RemoteFeed.id_for_url(feed.url)
         schedule_feed_index(feed.url, feed.next_poll_time, context, message_id=message_id)
+
+    run_post_index_hooks(feed, context)
+
 
 def compute_next_fetch_interval(update_history):
     # XXX plug-in ?
@@ -197,16 +218,9 @@ class FeedIndexer(FeedIndexerConsumer):
 
     def handle_poll(self, url, message_data, message):
         log.info('Recieved poll index request for %s' % url)
-        reschedule = not message_data.get('skip_reschedule', False)
-        http_cache = self.context.config.get('http', {}).get('cache', None)
-        index_feed_polling(url, self.context, http_cache=http_cache, reschedule=reschedule)
+        index_feed_polling(url, self.context, request_info=message_data)
     
     def handle_push(self, url, message_data, message):
         log.info('Recieved push index request for %s' % url)
         content = message_data['content']
-        kw = {}
-        if 'digest' in message_data:
-            kw['digest'] = message_data['digest']
-        if 'from_hub' in message_data:
-            kw['from_hub'] = message_data['from_hub']
-        index_feed_push(url, content, self.context, **kw)
+        index_feed_push(url, content, self.context, request_info=message_data)

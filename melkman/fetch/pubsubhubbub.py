@@ -1,4 +1,5 @@
 import logging
+from giblets import Component, implements
 from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
 from httplib2 import Http
@@ -6,8 +7,16 @@ import traceback
 from urllib import quote_plus, urlencode
 from webob import Request, Response
 
+try:
+    from hashlib import sha1 # python > 2.5
+except ImportError:
+    from sha import new as sha1 # python <= 2.5
+
+
 from melkman.db import RemoteFeed
 from melkman.fetch.api import push_feed_index
+from melkman.fetch.api import IndexRequestFilter
+from melkman.fetch.api import PostIndexAction
 from melk.util.nonce import nonce_str
 
 log = logging.getLogger(__name__)
@@ -169,4 +178,44 @@ class WSGISubClient(object):
         url = req.GET.get('url', None)
         digest = req.headers.get('X-Hub-Signature', None)
         content = req.body
-        push_feed_index(url, content, self.context, digest=digest, from_hub=True)
+        push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
+
+class HubPushValidator(Component):
+    """
+    validates requests that are pushed from 
+    a pubsubhubbub hub.
+    """
+    implements(IndexRequestFilter)
+
+    def accepts_request(self, feed, request, context):
+        # only validate requests marked as from a hub
+        if not request.get('from_hub', False) == True:
+            return True
+
+        content = request.get('content', '')
+        if not feed.hub_info.enabled:
+            log.warn("Ignoring hub push for unsubscribed feed.")
+            return False
+
+        if 'digest' in request:
+            if not _digest_matches(request['digest'], content, feed.hub_info.secret):
+                log.warn("Rejecting content push: digest (%s) did not match!" % request['digest'])
+                return False
+
+        return True
+
+def _digest_matches(digest, content, secret):
+
+    if not secret or not digest or not content:
+        return False
+
+    if not digest.startswith("sha1="):
+        return False
+
+    digest = digest[5:]
+
+    hasher = sha1()
+    hasher.update(secret)
+    hasher.update(content)
+
+    return hasher.hexdigest() == digest
