@@ -47,7 +47,7 @@ class GreenContext(Context):
             pass
 
     def create_broker_connection(self):
-        kargs = dict(self.config.amqp.broker)
+        kargs = dict(self.config.amqp)
         if 'port' in kargs:
             kargs['port'] = int(kargs['port'])
         kargs['backend_cls'] = GreenAMQPBackend

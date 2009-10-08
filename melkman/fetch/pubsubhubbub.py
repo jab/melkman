@@ -180,6 +180,12 @@ class WSGISubClient(object):
         content = req.body
         push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
 
+class HubAutosubscriber(Component):
+    implements(PostIndexAction)
+
+    def feed_reindexed(self, feed, context):
+        pass
+
 class HubPushValidator(Component):
     """
     validates requests that are pushed from 

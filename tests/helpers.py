@@ -15,7 +15,7 @@ from melk.util.hash import melk_id
 from melk.util.nonce import nonce_str
 
 
-__all__ = ['make_db', 'fresh_context', 'data_path', 'test_ini_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
+__all__ = ['make_db', 'fresh_context', 'data_path', 'test_yaml_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
            'append_param', 'no_micro', 'TestHTTPServer', 'FileServer']
 
@@ -24,9 +24,9 @@ def data_path():
     here = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(here, 'data')
 
-def test_ini_file():
+def test_yaml_file():
     here = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(here, 'test.ini')
+    return os.path.join(here, 'test.yaml')
         
 def make_db():
     ctx = fresh_context()
@@ -34,7 +34,7 @@ def make_db():
 
 def fresh_context():
     from melkman.green import GreenContext
-    ctx = GreenContext.from_ini(test_ini_file())
+    ctx = GreenContext.from_yaml(test_yaml_file())
     ctx.bootstrap(purge=True)
     return ctx
     
