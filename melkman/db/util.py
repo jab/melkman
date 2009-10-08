@@ -3,6 +3,9 @@ from couchdb.schema import Document, Schema, Field
 import random
 import time
 from melk.util.dibject import DibWrap
+import logging
+
+log = logging.getLogger(__name__)
 
 class DocumentHelper(Document):
     
@@ -62,7 +65,7 @@ def batched_view_iter(db, view, batch_size, **kw):
             done = True
 
 MAX_EXECUTIONS = 6
-def backoff_save(saver):
+def backoff_save(saver, pass_count=False):
     """
     This executes 'saver'.  If a ResourceConflict is detected, 
     it is reexecuted with a random exponential backoff.
@@ -72,7 +75,10 @@ def backoff_save(saver):
     executions = 1
     while(True):
         try:
-            return saver()
+            if pass_count:
+                return saver(executions)
+            else:
+                return saver()
         except ResourceConflict:
             if executions >= MAX_EXECUTIONS:
                 log.warn("Too many conflicts! giving up")
@@ -80,6 +86,8 @@ def backoff_save(saver):
             else:
                 if executions >= 3:
                     log.warn("Conflict #%d! retrying in %s seconds" % (executions, backoff))
+                else: 
+                    log.debug("Conflict #%d! retrying in %s seconds" % (executions, backoff))
                 time.sleep(backoff)
                 backoff *= random.uniform(1.5, 2)
                 executions += 1
