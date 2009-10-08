@@ -9,7 +9,7 @@ import threading
 import traceback
 from urlparse import urlparse
 
-from giblets import Component, ExtensionInterface, ExtensionPoint, BlacklistComponentManager
+from giblets import Component, ExtensionInterface, ExtensionPoint, PatternComponentManager
 from giblets.search import find_plugins_by_entry_point
 from melk.util.dibject import Dibject, dibjectify, json_wake
 from melk.util.typecheck import is_dicty, asbool
@@ -195,15 +195,14 @@ class PluginBootstrapper(Component):
         for plugin in self.plugins:
             plugin.bootstrap(context, purge=purge)
 
-class MelkmanComponentManager(BlacklistComponentManager):
+class MelkmanComponentManager(PatternComponentManager):
 
     def __init__(self, context):
-        BlacklistComponentManager.__init__(self)
+        PatternComponentManager.__init__(self)
         self.context = context
-        for component_id, cfg in self.context.config.items():
-            enabled = asbool(cfg.get('enabled', True))
-            if not enabled:
-                self.disable_component(component_id)
+
+        for cfg in self.context.config.get('plugins', []):
+            self.append_pattern(cfg.pattern, cfg.enabled)
 
     def component_activated(self, component):
         if IContextConfigurable.providedBy(component):

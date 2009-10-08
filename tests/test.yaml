@@ -17,3 +17,9 @@ pubsubhubbub_client: {
     port: 7449,
     callback_url: "http://localhost:7449",
 }
+
+plugins:
+- pattern: melkman.*
+  enabled: true
+- pattern: test_*
+  enabled: true
