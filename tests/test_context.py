@@ -15,7 +15,9 @@ def test_context_bootstrap_plugins():
         def bootstrap(self, context, purge=False):
             FooComponent.did_bootstrap += 1
 
-    config = {"test_context.FooComponent": {"plugin_enabled": True}}
+    config = {
+        'plugins': [{'pattern': "test_context.FooComponent", "enabled": True}]
+    }
     ctx = Context.from_dict(config, defaults=Context.from_yaml(test_yaml_file()).config)
     
     ctx.bootstrap(purge=False)
@@ -46,12 +48,13 @@ def test_context_components():
         bazoo = ExtensionPoint(IBaz)
 
 
+
     config = """
         {
-        "test_context.FooComponent": {"enabled": true},
-        "test_context.BarComponent": {"enabled": false},
-        "test_context.BazHolder": {"enabled": true},
-        "unrelated.OtherJunk": {"abc": 123}
+        "plugins": [
+            {"pattern": "test_context.FooComponent", "enabled": true},
+            {"pattern": "test_context.BarComponent", "enabled": false},
+            {"pattern": "test_context.BazHolder", "enabled": true}]
         }
     """
     

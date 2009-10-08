@@ -19,3 +19,9 @@ pubsubhubbub_client: {
     callback_url: "http://localhost:9449",
     # callback_url = http://www.example.com/where_its_exposed/pshb    
 }
+
+plugins:
+    - pattern: melkman.*
+      enabled: true
+    - pattern: melkman.fetch.pubsubhubbub.*
+      enabled: false
