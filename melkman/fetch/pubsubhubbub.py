@@ -12,8 +12,9 @@ try:
 except ImportError:
     from sha import new as sha1 # python <= 2.5
 
-
+from melkman.context import IContextConfigurable
 from melkman.db import RemoteFeed
+from melkman.db.util import backoff_save
 from melkman.fetch.api import push_feed_index
 from melkman.fetch.api import IndexRequestFilter
 from melkman.fetch.api import PostIndexAction
@@ -181,10 +182,42 @@ class WSGISubClient(object):
         push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
 
 class HubAutosubscriber(Component):
-    implements(PostIndexAction)
+    implements(PostIndexAction, IContextConfigurable)
 
     def feed_reindexed(self, feed, context):
-        pass
+        if not feed.hub_info.enabled:
+            hubs = feed.find_hub_urls()
+            if len(hubs) > 0:
+                _sub_any(feed, hubs, self.context)
+
+    def set_context(self, context):
+        self.context = context
+
+def _sub_any(feed, hubs, context):
+    """
+    suscribe to any hub in the list of hubs given that
+    works. 
+    """
+    for hub in hubs:
+        try:
+            # use exponential backoff method to avoid
+            # conflicts when setting up.
+            log.debug("Trying to subscribe to %s at hub %s" % (feed.url, hub))
+            def try_sub(tries):
+                if tries > 1:
+                    ff = RemoteFeed.load(context.db, feed.id)
+                else:
+                    ff = feed
+                return hubbub_sub(ff, context, hub_url=hub)
+            r, c = backoff_save(try_sub, pass_count=True)
+            
+            if r.status >= 200 and r.status < 300:
+                log.info("Subscribed to %s at hub %s (%d)" % (feed.url, hub, r.status))
+                return
+            else: 
+                log.info("Failed to subscribe to %s at hub %s (%d)" % (feed.url, hub, r.status))
+        except: 
+            log.error("Failed to subscribe to %s at hub %s: %s" % (feed.url, hub, traceback.format_exc()))
 
 class HubPushValidator(Component):
     """
