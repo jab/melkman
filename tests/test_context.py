@@ -2,14 +2,6 @@ import os
 from helpers import *
 
 
-
-def test_context_from_ini():
-    from melkman.context import Context
-    ctx = Context.from_ini(os.path.join(data_path(), "test_context_from_ini.ini"))
-    
-    assert ctx.config['a.b.c'].foo == 'bar'
-    assert ctx.config.test.foo.bar.quux == 'flup'
-    
 def test_context_bootstrap_plugins():
     from giblets import Component, implements
     from melkman.context import Context, IRunDuringBootstrap
@@ -24,7 +16,7 @@ def test_context_bootstrap_plugins():
             FooComponent.did_bootstrap += 1
 
     config = {"test_context.FooComponent": {"plugin_enabled": True}}
-    ctx = Context.from_dict(config, defaults=Context.from_ini(test_ini_file()).config)
+    ctx = Context.from_dict(config, defaults=Context.from_yaml(test_yaml_file()).config)
     
     ctx.bootstrap(purge=False)
     

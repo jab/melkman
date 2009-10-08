@@ -1,4 +1,4 @@
-from ConfigParser import ConfigParser
+from yaml import load as load_yaml
 from carrot.connection import BrokerConnection
 from carrot.messaging import Publisher
 from copy import deepcopy
@@ -23,11 +23,11 @@ DEFAULTS = {
         'database': 'melkman'
     },
     'amqp': {
-        'broker': {'hostname': 'localhost',
-                   'port': 5672,
-                   'virtual_host': 'melkman',
-                   'userid': 'melkman',
-                   'password': 'melkman'},
+        'hostname': 'localhost',
+        'port': 5672,
+        'virtual_host': 'melkman',
+        'userid': 'melkman',
+        'password': 'melkman'
     },
 }
 
@@ -95,7 +95,7 @@ class Context(object):
         return conn
         
     def create_broker_connection(self):
-        kargs = dict(self.config.amqp.broker)
+        kargs = dict(self.config.amqp)
         if 'port' in kargs:
             kargs['port'] = int(kargs['port'])
         return BrokerConnection(**kargs)
@@ -150,27 +150,13 @@ class Context(object):
         return cls(cfg)
 
     @classmethod
-    def from_ini(cls, ini_filename, defaults=DEFAULTS):
-        cfg_parser = ConfigParser()
-        cfg_parser.readfp(open(ini_filename))
-        interp = {'here': os.path.abspath(os.path.dirname(ini_filename))}
-        config = {}
-
-        for section_name in cfg_parser.sections():
-            section = config.setdefault(section_name, {})
-            
-            for option in cfg_parser.options(section_name):
-                cur = section
-                ks = option.split('.')
-                for k in ks[0:-1]:
-                    cur = cur.setdefault(k, {})
-                cur[ks[-1]] = cfg_parser.get(section_name, option, 0, interp)
-
+    def from_yaml(cls, yaml_filename, defaults=DEFAULTS):
+        yaml_file = open(yaml_filename, 'r')
+        cfg = load_yaml(yaml_file)
         if defaults is not None:
-            _deep_setdefault(config, defaults)
+            _deep_setdefault(cfg, defaults)
+        return cls(cfg)
 
-        return cls(config)
-    
 class IContextConfigurable(ExtensionInterface):
     """
     implement this interface to recieve the current context
