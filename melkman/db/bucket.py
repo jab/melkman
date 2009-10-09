@@ -164,6 +164,7 @@ class NewsBucket(DocumentHelper):
     def _removed_item(self, item):
         try:
             del self._added[item.id]
+            return
         except KeyError:
             pass
         self._removed[item.id] = item
