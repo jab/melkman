@@ -80,12 +80,6 @@ class NewsItemRef(DocumentHelper):
         for field in _REPLICATE_FIELDS:
             val = getattr(other_item, field)
             setattr(self, field, val)
-            
-    def _rebind(self, bucket_id):
-        if '_rev' in self._data:
-            raise ResourceConflict("cannot rebind after save.")
-        self.bucket_id = bucket_id
-        self._data['_id'] = self.dbid(bucket_id, item_id)
 
     @classmethod
     def create_from_info(cls, context, bucket_id, **kw):
