@@ -12,22 +12,20 @@ if __name__ == '__main__':
 
     # hijacked from pylons
     locs = {'ctx': context}
-    banner = 'You may access the current context as "ctx"'
+    banner_header = 'Melkman Interactive Shell\n'
+    banner_footer = '\n\nYou may access the current context as "ctx"'
     try:
         # try to use IPython if possible
         from IPython.Shell import IPShellEmbed
-
         shell = IPShellEmbed(argv=sys.argv)
-        shell.set_banner(shell.IP.BANNER + '\n\n' + banner)
-        try:
-            shell(local_ns=locs, global_ns={})
-        finally:
-            import paste
-            paste.registry.restorer.restoration_end()
+        banner = banner_header + shell.IP.BANNER + banner_footer
+        shell.set_banner(banner)
+        shell(local_ns=locs, global_ns={})
     except ImportError:
         import code
-        newbanner = "Melkman Interactive Shell\nPython %s\n\n" % sys.version
-        banner = newbanner + banner
+        pyver = 'Python %s' % sys.version
+        banner = banner_header +  pyver + banner_footer
+        
         shell = code.InteractiveConsole(locals=locs)
         try:
             import readline
