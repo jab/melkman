@@ -123,7 +123,7 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
                 log.debug('Ignoring subscription update to %s with no bucket id...' % cid)
                 return
 
-            composite = Composite.load(self.context.db, cid)
+            composite = Composite.get(cid, self.context)
             if composite is None or not 'Composite' in composite.document_types:
                 log.error("Ignoring subscription update for non-existent composite %s" % cid)                
                 return
@@ -136,10 +136,10 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
             updated_refs = []
             for item in updated_items:
                 ref = dict([(str(k), v) for k, v in item.items()])
-                updated_refs.append(NewsItemRef.wrap(ref))
-            count = composite.filtered_update(updated_refs, self.context)
+                updated_refs.append(NewsItemRef.from_doc(ref, self.context))
+            count = composite.filtered_update(updated_refs)
             if count > 0:
-                composite.save(self.context)
+                composite.save()
         except:
             log.error("Error updating composite subscription %s: %s" % 
                       (message_data, traceback.format_exc()))
@@ -162,7 +162,7 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
             cid = message_data.get('bucket_id', None)
             if cid is None:
                 log.error("Ignoring init_subscription with no bucket_id: %s" % message_data)
-            composite = Composite.load(self.context.db, cid)
+            composite = Composite.get(cid, self.context)
             if composite is None or not 'Composite' in composite.document_types:
                 log.error("Ignoring subscription update for non-existent composite %s" % cid)
                 return
@@ -174,14 +174,14 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
                     log.warn("ignoring subscription %s -> %s, not in composite" % (sub, cid))
                     continue
                 
-                bucket = NewsBucket.load(self.context.db, sub)
+                bucket = NewsBucket.get(sub, self.context)
                 if bucket is None:
                     log.warn("Ingoring init subscription to unknown object (%s)" % composite.subscriptions[sub])
                     continue
     
                 #  try 'casting' to a RemoteFeed
                 if 'RemoteFeed' in bucket.document_types:
-                    rf = RemoteFeed.wrap(bucket.unwrap())
+                    rf = RemoteFeed.from_doc(bucket.unwrap(), self.context)
                     # mark as needing immediate fetch if 
                     # there is no history for this feed. 
                     if len(rf.update_history) == 0:
@@ -190,12 +190,12 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
     
                 try:
                     log.debug("init subscription %s -> %s" % (sub, cid))
-                    updates += composite.init_subscription(sub, self.context)
+                    updates += composite.init_subscription(sub)
                     sleep(0)
                 except:
                     log.error("Error initializing subscription %s -> %s: %s" % (sub, cid, traceback.format_exc()))
             if updates > 0:
-                composite.save(self.context)
+                composite.save()
                 
             # request that we start indexing anything new...
             for url in new_feeds:
