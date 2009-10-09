@@ -125,7 +125,7 @@ class DummyItem(Dibject):
 def dummy_news_item(d):
     di = DummyItem(dibjectify(d))
     di.setdefault('author', '')
-    di.setdefault('id', random_id())
+    di.setdefault('item_id', random_id())
     di.setdefault('timestamp', datetime.utcnow())
     di.setdefault('title', '')
     di.setdefault('link', '')

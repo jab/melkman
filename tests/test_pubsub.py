@@ -117,9 +117,9 @@ def test_sub_verify():
     assert r.status == 404, 'Expected 404, got %d' % r.status
     
     # now create it
-    rf = RemoteFeed.create_from_url(url)
+    rf = RemoteFeed.create_from_url(url, ctx)
     rf.feed_info = {"links": [{"rel": "self", "href": url}]}
-    rf.save(ctx)
+    rf.save()
     
     # still should not verify
     r, c = http.request(cb, 'GET')
@@ -130,7 +130,7 @@ def test_sub_verify():
     rf.hub_info.enabled = True
     rf.hub_info.verify_token = verify_token
     rf.hub_info.secret = secret
-    rf.save(ctx)
+    rf.save()
     
     # now it should accept verification...
     for i in range(3):
@@ -151,7 +151,7 @@ def test_sub_verify():
         
     # after disabling, the unsub verify should be okay
     rf.hub_info.enabled = False
-    rf.save(ctx)
+    rf.save()
     r, c = http.request(cb, 'GET')
     assert r.status == 200, 'Expected 200, got %d' % r.status
     assert c == challenge, 'expected %s, got %s' % (challence, c)
@@ -201,52 +201,52 @@ def test_sub_push():
     
     cb = callback_url_for(url, ctx)
     
-    assert RemoteFeed.lookup_by_url(ctx.db, url) == None
+    assert RemoteFeed.get_by_url(url, ctx) == None
     
     # try posting something that is not subscribed
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(1)
     # nothing should happen...
-    assert RemoteFeed.lookup_by_url(ctx.db, url) == None
+    assert RemoteFeed.get(url, ctx) == None
 
     # set up the feed, but don't subscribe
-    rf = RemoteFeed.create_from_url(url)
-    rf.save(ctx)
+    rf = RemoteFeed.create_from_url(url, ctx)
+    rf.save()
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(1)
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    rf = RemoteFeed.get_by_url(url, ctx)
     assert len(rf.entries) == 0
     
     # now set it up 
     rf.hub_info.enabled = True
     rf.hub_info.secret = secret
-    rf.save(ctx)
+    rf.save()
 
     # try with wrong digest...
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': 'wrong'})
     assert r.status == 200, 'Expected 200, got %d' % r.status
-    sleep(0.2)
+    sleep(0.5)
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    rf = RemoteFeed.get_by_url(url, ctx)
     assert len(rf.entries) == 0
     
     # try with no digest
     r, c = http.request(cb, 'POST', body=content)
     assert r.status == 200, 'Expected 200, got %d' % r.status
-    sleep(0.2)
+    sleep(0.5)
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    rf = RemoteFeed.get_by_url(url, ctx)
     assert len(rf.entries) == 0
     
     # finally, try with correct digest
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
-    sleep(0.2)
+    sleep(0.5)
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    rf = RemoteFeed.get_by_url(url, ctx)
     assert len(rf.entries) == 10
     for iid in melk_ids_in(content, url):
         assert iid in rf.entries 
@@ -292,17 +292,17 @@ def test_sub_to_hub():
     hub_url = 'http://localhost:%d/' % hub.port
     
     feed_url = 'http://example.org/feeds/99'
-    rf = RemoteFeed.create_from_url(feed_url)
+    rf = RemoteFeed.create_from_url(feed_url, ctx)
     rf.feed_info = {'links': [{'rel': 'self', 'href': feed_url},
                               {'rel': 'hub', 'href': hub_url}]}
-    rf.save(ctx)
+    rf.save()
     
     cb = callback_url_for(feed_url, ctx)
     
     assert not hub.is_verified(cb, feed_url)
     r, c = hubbub_sub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
-    sleep(.2)
+    sleep(.5)
     assert hub.is_verified(cb, feed_url)
     secret = hub.secret_for(cb, feed_url)
     
@@ -316,9 +316,10 @@ def test_sub_to_hub():
     digest = "sha1=%s" % hasher.hexdigest()    
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
-    sleep(0.2)
+    sleep(0.5)
+    
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, feed_url)
+    rf = RemoteFeed.get_by_url(feed_url, ctx)
     assert len(rf.entries) == 10
     for iid in melk_ids_in(content, feed_url):
         assert iid in rf.entries
@@ -326,7 +327,7 @@ def test_sub_to_hub():
     # unsub
     r, c = hubbub_unsub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
-    sleep(.2)
+    sleep(.5)
     assert not hub.is_verified(cb, feed_url)
     
     # try a push (should fail)
@@ -337,9 +338,9 @@ def test_sub_to_hub():
     digest = "sha1=%s" % hasher.hexdigest()    
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
-    sleep(0.2)
+    sleep(0.5)
     # nothing should happen...
-    rf = RemoteFeed.lookup_by_url(ctx.db, feed_url)
+    rf = RemoteFeed.get_by_url(feed_url, ctx)
     assert len(rf.entries) == 10
     for iid in melk_ids_in(content, feed_url):
         assert not iid in rf.entries
@@ -394,7 +395,7 @@ def test_auto_sub():
     cb = callback_url_for(feed_url, ctx)
     assert hub.is_verified(cb, feed_url)
 
-    rf = RemoteFeed.lookup_by_url(ctx.db, feed_url)
+    rf = RemoteFeed.get_by_url(feed_url, ctx)
     assert rf.hub_info.enabled
     assert rf.hub_info.hub_url == hub_url
 
@@ -419,9 +420,9 @@ def test_push_index_digest():
     indexer = spawn(consumer_loop, FeedIndexer, ctx)
 
     url = 'http://www.example.com/feeds/2'
-    rf = RemoteFeed.create_from_url(url)
+    rf = RemoteFeed.create_from_url(url, ctx)
     rf.hub_info.enabled = True
-    rf.save(ctx)
+    rf.save()
 
     secret = nonce_str()
 
@@ -438,19 +439,19 @@ def test_push_index_digest():
     # no hub secret is specified on the feed
     #
     push_feed_index(url, content, ctx, digest=wrong_digest, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid not in rf.entries
     push_feed_index(url, content, ctx, digest=None, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid not in rf.entries
     # even the correct digest fails as no digest has been set 
     push_feed_index(url, content, ctx, digest=correct_digest, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid not in rf.entries
 
@@ -458,23 +459,23 @@ def test_push_index_digest():
     # now set the hub secret
     #
     rf.hub_info.secret = secret
-    rf.save(ctx)
+    rf.save()
 
     push_feed_index(url, content, ctx, digest=wrong_digest, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid not in rf.entries
     push_feed_index(url, content, ctx, digest=None, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid not in rf.entries
 
     # finally, the correct digest should work now...
     push_feed_index(url, content, ctx, digest=correct_digest, from_hub=True)
-    sleep(.2)
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    sleep(.5)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid in rf.entries
 

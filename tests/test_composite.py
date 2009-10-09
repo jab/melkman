@@ -3,31 +3,31 @@ from helpers import *
 def test_create_composite():
     from melkman.db.composite import Composite
     ctx = fresh_context()
-    cc = Composite()
-    cc.save(ctx)
+    cc = Composite.create(ctx)
+    cc.save()
 
 def test_composites_by_sub():
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite, view_composites_by_subscription
     ctx = fresh_context()
-    c1 = Composite()
-    c2 = Composite()
+    c1 = Composite.create(ctx)
+    c2 = Composite.create(ctx)
 
-    bucket1 = NewsBucket()
-    bucket1.save(ctx)
+    bucket1 = NewsBucket.create(ctx)
+    bucket1.save()
     
-    bucket2 = NewsBucket()
-    bucket2.save(ctx)
+    bucket2 = NewsBucket.create(ctx)
+    bucket2.save()
 
-    bucket3 = NewsBucket()
-    bucket3.save(ctx)
+    bucket3 = NewsBucket.create(ctx)
+    bucket3.save()
     
     c1.subscribe(bucket1)
-    c1.save(ctx)
+    c1.save()
 
     c2.subscribe(bucket1)
     c2.subscribe(bucket2)
-    c2.save(ctx)
+    c2.save()
 
     count = 0
     seen = set()
@@ -42,7 +42,7 @@ def test_composites_by_sub():
     count = 0
     seen = set()
     for r in view_composites_by_subscription(ctx.db, include_docs=True, startkey=bucket2.id, endkey=bucket2.id):
-        comp = Composite.wrap(r.doc)
+        comp = Composite.from_doc(r.doc, ctx)
         seen.add(comp.id)
         count += 1
     assert count == 1
@@ -58,13 +58,13 @@ def test_composite_subs_by_title():
     from random import shuffle
     
     ctx = fresh_context()
-    cc = Composite()
+    cc = Composite.create(ctx)
 
     buckets = []
     for i in range(10):
-        bucket = NewsBucket()
+        bucket = NewsBucket.create(ctx)
         bucket.title = 'bucket %d' % i
-        bucket.save(ctx)
+        bucket.save()
         buckets.append(bucket)
     
     shuffled_buckets = list(buckets)
@@ -72,7 +72,7 @@ def test_composite_subs_by_title():
     
     for bucket in shuffled_buckets:
         cc.subscribe(bucket)
-    cc.save(ctx)
+    cc.save()
     
     # should come out in alphabetical order
 
@@ -85,7 +85,7 @@ def test_composite_filtered_update():
     from random import shuffle
     
     ctx = fresh_context()
-    cc = Composite()
+    cc = Composite.create(ctx)
     # a filter stack that accepts only things with the 
     # word tortise in the title, or is tagged tortise
     cc.filters.append({'op': 'match_title',
@@ -110,12 +110,19 @@ def test_composite_filtered_update():
     all_items += not_ok_items
     shuffle(all_items)
     
-    cc.filtered_update(all_items, ctx)
+    cc.filtered_update(all_items)
     
     for item in ok_items:
         assert cc.has_news_item(item)
 
     for item in not_ok_items:
         assert not cc.has_news_item(item)
+
+    cc.save()
+    cc = Composite.get(cc.id, ctx)
     
-    
+    for item in ok_items:
+        assert cc.has_news_item(item)
+
+    for item in not_ok_items:
+        assert not cc.has_news_item(item)

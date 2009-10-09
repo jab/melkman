@@ -50,7 +50,7 @@ def hubbub_sub(feed, context, hub_url=None):
     feed.hub_info.hub_url = hub_url
     feed.hub_info.verify_token = nonce_str()
     feed.hub_info.secret = nonce_str()
-    feed.save(context)
+    feed.save()
 
     cb = callback_url_for(feed.url, context)
     req = {
@@ -75,7 +75,7 @@ def hubbub_unsub(feed, context):
 
     if feed.hub_info.enabled == True:
         feed.hub_info.enabled = False
-        feed.save(context)
+        feed.save()
 
     cb = callback_url_for(feed.url, context)
     req = {
@@ -151,7 +151,7 @@ class WSGISubClient(object):
         if topic is None or mode is None or verify_token is None or url is None:
             return False
 
-        rf = RemoteFeed.lookup_by_url(self.context.db, url)
+        rf = RemoteFeed.get_by_url(url, self.context)
         if rf is None:
             # confirm unsubscribes for feeds
             # we don't have...
