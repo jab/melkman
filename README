@@ -95,7 +95,7 @@ You may access the current context as "ctx"
 >>> request_feed_index(url, ctx)
 
 >>> from melkman.db import RemoteFeed
->>> slashdot = RemoteFeed.lookup_by_url(url, ctx)
+>>> slashdot = RemoteFeed.get_by_url(url, ctx)
 
 >>> slashdot.entries.values()[0].title
 u"Something disastrous is happening to the internets"
