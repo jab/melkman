@@ -105,7 +105,7 @@ class Composite(NewsBucket):
 
     def _send_modified_event(self, **kw):
         kwa = dict(kw)
-        kwa['new_subscriptions'] = list(self._added_subs),
+        kwa['new_subscriptions'] = list(self._added_subs)
         kwa['removed_subscriptions'] = list(self._removed_subs)
         self._added_subs = set()
         self._removed_subs = set()
