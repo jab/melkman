@@ -95,7 +95,7 @@ You may access the current context as "ctx"
 >>> request_feed_index(url, ctx)
 
 >>> from melkman.db import RemoteFeed
->>> slashdot = RemoteFeed.lookup_by_url(ctx.db, url)
+>>> slashdot = RemoteFeed.lookup_by_url(url, ctx)
 
 >>> slashdot.entries.values()[0].title
 u"Something disastrous is happening to the internets"
@@ -104,20 +104,20 @@ Creating an aggregation
 -----------------------
 
 >>> from melkman.db import Composite
->>> my_feeds = Composite()
+>>> my_feeds = Composite.create(ctx)
 >>> my_feeds.subscribe(slashdot)
->>> my_feeds.save(ctx)
+>>> my_feeds.save()
 
->>> my_feeds = Composite.load(ctx.db, my_feeds.id)
+>>> my_feeds = Composite.get(my_feeds.id, ctx)
 >>> my_feeds.entries.values()[0].title
 u"Something disastrous is happening to the internets"
 
 >>> url = "http://www.nytimes.com/services/xml/rss/nyt/HomePage.xml" 
->>> nytimes = RemoteFeed.create_from_url(url)
->>> nytimes.save(ctx)
+>>> nytimes = RemoteFeed.create_from_url(url, ctx)
+>>> nytimes.save()
 >>> my_feeds.subscribe(nytimes)
->>> my_feeds.save(ctx)
+>>> my_feeds.save()
 
->>> my_feeds = Composite.load(ctx.db, my_feeds.id)
+>>> my_feeds = Composite.get(my_feeds.id, ctx)
 >>> my_feeds.entries.values()[0].title
 u"Something disastrous is happening to the earths"
