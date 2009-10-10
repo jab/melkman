@@ -23,7 +23,7 @@ from couchdb.schema import DateTimeField
 import logging
 import traceback
 
-from giblets import Component, implements
+from giblets import Component, ExtensionInterface, implements
 from melkman.context import IRunDuringBootstrap
 from melkman.scheduler import defer_message
 
@@ -82,7 +82,6 @@ def push_feed_index(url, content, context, **kw):
     publisher.send(message)
     publisher.close()
 
-
 class FeedIndexerSetup(Component):
     implements(IRunDuringBootstrap)
     
@@ -98,3 +97,19 @@ class FeedIndexerSetup(Component):
             cnx = context.broker
             backend = cnx.create_backend()
             backend.queue_purge(INDEX_FEED_QUEUE)
+
+class PostIndexAction(ExtensionInterface):
+
+    def feed_reindexed(feed, context):
+        """
+        called after a feed has been updated.
+        """
+
+class IndexRequestFilter(ExtensionInterface):
+
+    def accepts_request(feed, request, context):
+        """
+        called before an index request is processed. 
+        if this returns False, the request will 
+        be rejected.
+        """

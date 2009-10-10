@@ -54,5 +54,6 @@ setup(
     fetch = melkman.fetch.api
     aggregator = melkman.aggregator.api
     filters = melkman.filters
+    pubsub = melkman.fetch.pubsubhubbub
     """,
 )

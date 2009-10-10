@@ -13,11 +13,11 @@ if __name__ == "__main__":
     from melkman.fetch import request_feed_index
 
     if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print "usage: %s <config.ini> [request_url]" % sys.argv[0]
+        print "usage: %s <config.yaml> [request_url]" % sys.argv[0]
         sys.exit(0)
 
-    ini_file = sys.argv[1]
-    context = GreenContext.from_ini(ini_file)
+    yaml_file = sys.argv[1]
+    context = GreenContext.from_yaml(yaml_file)
 
 
     from melkman.aggregator.worker import CompositeUpdater, CompositeUpdateDispatcher

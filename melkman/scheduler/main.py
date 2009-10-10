@@ -15,11 +15,11 @@ if __name__ == '__main__':
     
     
     if len(sys.argv) != 2:
-        print "usage: %s <config.ini>" % sys.argv[0]
+        print "usage: %s <config.yaml>" % sys.argv[0]
         sys.exit(0)
 
-    ini_file = sys.argv[1]
-    context = GreenContext.from_ini(ini_file)
+    yaml_file = sys.argv[1]
+    context = GreenContext.from_yaml(yaml_file)
 
     sms = ScheduledMessageService(context)
     sms.run()

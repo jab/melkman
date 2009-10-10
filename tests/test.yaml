@@ -1,0 +1,25 @@
+couchdb: {
+    hostname: localhost,
+    port: 5984,
+    database: melkman_test,
+}
+
+amqp: {
+    hostname: localhost,
+    port: 5672,
+    virtual_host: melkman_test,
+    userid: melkman,
+    password: melkman,
+}
+
+pubsubhubbub_client: {
+    host: 127.0.0.1,
+    port: 7449,
+    callback_url: "http://localhost:7449",
+}
+
+plugins:
+- pattern: melkman.*
+  enabled: true
+- pattern: test_*
+  enabled: true

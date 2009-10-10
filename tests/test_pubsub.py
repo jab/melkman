@@ -1,11 +1,89 @@
 from melkman.green import green_init
 green_init()
 
-
+from httplib2 import Http
 import logging 
+from melk.util.nonce import nonce_str
+import traceback
+from webob import Request, Response
 from helpers import *
 
 log = logging.getLogger(__name__)
+
+class FakeHub(TestHTTPServer):
+
+    def __init__(self, port=9299):
+        TestHTTPServer.__init__(self, port=port)
+        self._verified = {}
+
+    def __call__(self, environ, start_response):
+        log.debug("FakeHub got request: %s" % environ)
+
+        req = Request(environ)
+        res = Response()
+        
+        try:
+            if req.method != 'POST':
+                res.status = 400
+                return
+        
+            cb = req.POST['hub.callback']
+            mode = req.POST['hub.mode']
+            topic = req.POST['hub.topic']
+            verify_token = req.POST.get('hub.verify_token', None)            
+
+            if not mode in ('subscribe', 'unsubscribe'):
+                res.status = 400
+                return
+            
+            # if the request already reflects the current state, return 204
+            if (((cb, topic) in self._verified and mode == 'subscribe') or
+                ((cb, topic) not in self._verified and mode == 'unsubscribe')):
+                res.status = 204
+                return
+
+            # do a verification...
+            challenge = nonce_str()
+        
+            vurl = cb
+            vurl = append_param(vurl, 'hub.mode', mode)
+            vurl = append_param(vurl, 'hub.topic', topic)
+            vurl = append_param(vurl, 'hub.challenge', challenge)
+            if verify_token:
+                vurl = append_param(vurl, 'hub.verify_token', verify_token)
+
+            http = Http()
+            r, c = http.request(vurl, 'GET')
+            
+            if r.status != 200 or c != challenge:
+                log.warn("Request did not validate :/ %s" % vurl)
+                res.status = 400
+                return
+            
+            # okay it was fine...
+            if mode == 'subscribe':
+                secret = req.POST.get('hub.secret', None)
+                self._verified[(cb, topic)] = secret
+            else:
+                try:
+                    del self._verified[(cb, topic)]
+                except KeyError:
+                    pass
+
+            res.status = 202
+            
+        except:
+            log.error("Error handling hub request: %s" % traceback.format_exc())
+            res.status = 500
+        finally:
+            log.debug("Returning w/ status=%s" % res.status)
+            return res(environ, start_response)
+    
+    def is_verified(self, cb, topic_url):
+        return (cb, topic_url) in self._verified
+
+    def secret_for(self, cb, topic_url):
+        return self._verified.get((cb, topic_url), None)
 
 def test_sub_verify():
     from httplib2 import Http
@@ -194,8 +272,8 @@ def test_sub_to_hub():
     from melkman.fetch.worker import FeedIndexer
     from melkman.fetch.pubsubhubbub import WSGISubClient
     from melkman.fetch.pubsubhubbub import callback_url_for
-    from melkman.fetch.pubsubhubbub import make_sub_request
-    from melkman.fetch.pubsubhubbub import make_unsub_request
+    from melkman.fetch.pubsubhubbub import hubbub_sub
+    from melkman.fetch.pubsubhubbub import hubbub_unsub
 
     
     import logging
@@ -203,100 +281,26 @@ def test_sub_to_hub():
     
     ctx = fresh_context()
     
-    class TestHub(TestHTTPServer):
-
-        def __init__(self, port=9299):
-            TestHTTPServer.__init__(self, port=port)
-            self._verified = {}
-
-        def __call__(self, environ, start_response):
-            log.debug("TestHub got request: %s" % environ)
-
-            req = Request(environ)
-            res = Response()
-            
-            try:
-                if req.method != 'POST':
-                    res.status = 400
-                    return
-            
-                cb = req.POST['hub.callback']
-                mode = req.POST['hub.mode']
-                topic = req.POST['hub.topic']
-                verify_token = req.POST.get('hub.verify_token', None)            
-
-                if not mode in ('subscribe', 'unsubscribe'):
-                    res.status = 400
-                    return
-                
-                # if the request already reflects the current state, return 204
-                if (((cb, topic) in self._verified and mode == 'subscribe') or
-                    ((cb, topic) not in self._verified and mode == 'unsubscribe')):
-                    res.status = 204
-                    return
-
-                # do a verification...
-                challenge = nonce_str()
-            
-                vurl = cb
-                vurl = append_param(vurl, 'hub.mode', mode)
-                vurl = append_param(vurl, 'hub.topic', topic)
-                vurl = append_param(vurl, 'hub.challenge', challenge)
-                if verify_token:
-                    vurl = append_param(vurl, 'hub.verify_token', verify_token)
-
-                http = Http()
-                r, c = http.request(vurl, 'GET')
-                
-                if r.status != 200 or c != challenge:
-                    log.warn("Request did not validate :/ %s" % vurl)
-                    res.status = 400
-                    return
-                
-                # okay it was fine...
-                if mode == 'subscribe':
-                    secret = req.POST.get('hub.secret', None)
-                    self._verified[(cb, topic)] = secret
-                else:
-                    try:
-                        del self._verified[(cb, topic)]
-                    except KeyError:
-                        pass
-    
-                res.status = 202
-                
-            except:
-                log.error("Error handling hub request: %s" % traceback.format_exc())
-                res.status = 500
-            finally:
-                log.debug("Returning w/ status=%s" % res.status)
-                return res(environ, start_response)
-        
-        def is_verified(self, cb, topic_url):
-            return (cb, topic_url) in self._verified
-
-        def secret_for(self, cb, topic_url):
-            return self._verified.get((cb, topic_url), None)
 
     w = WSGISubClient(ctx)
     client = spawn(w.run)
     indexer = spawn(consumer_loop, FeedIndexer, ctx)
 
-    hub = TestHub()
+    hub = FakeHub()
     hub_proc = spawn(hub.run)
     
     hub_url = 'http://localhost:%d/' % hub.port
     
     feed_url = 'http://example.org/feeds/99'
     rf = RemoteFeed.create_from_url(feed_url)
-    rf.feed_info = {'links': [{'rel': 'self', 'href': feed_url}]}
-    rf.hub_info.hub_url = hub_url
+    rf.feed_info = {'links': [{'rel': 'self', 'href': feed_url},
+                              {'rel': 'hub', 'href': hub_url}]}
     rf.save(ctx)
     
     cb = callback_url_for(feed_url, ctx)
     
     assert not hub.is_verified(cb, feed_url)
-    r, c = make_sub_request(rf, ctx)
+    r, c = hubbub_sub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
     sleep(.2)
     assert hub.is_verified(cb, feed_url)
@@ -320,7 +324,7 @@ def test_sub_to_hub():
         assert iid in rf.entries
     
     # unsub
-    r, c = make_unsub_request(rf, ctx)
+    r, c = hubbub_unsub(rf, ctx)
     assert r.status == 202, 'Expected 202, got %d' % r.status
     sleep(.2)
     assert not hub.is_verified(cb, feed_url)
@@ -344,3 +348,134 @@ def test_sub_to_hub():
     indexer.kill()
     hub_proc.kill()
 
+def test_auto_sub():
+    # tests autosubscription when feeds are indexed 
+    # with <link rel="hub" /> entries. 
+    from datetime import datetime
+    from eventlet.api import sleep
+    from eventlet.proc import spawn
+    from melkman.db import RemoteFeed
+    from melkman.green import consumer_loop
+    from melkman.fetch import push_feed_index
+    from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
+    from melkman.fetch.worker import FeedIndexer
+
+    ctx = fresh_context()
+    
+    w = WSGISubClient(ctx)
+    client = spawn(w.run)
+    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+
+    hub = FakeHub()
+    hub_proc = spawn(hub.run)    
+    hub_url = 'http://localhost:%d/' % hub.port
+
+    feed_url = 'http://www.example.org/feeds/12'
+
+    content = """<?xml version="1.0" encoding="utf-8"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+      <id>%s</id>
+      <title>Blah</title>
+      <link rel="self" href="%s"/>
+      <link rel="hub" href="%s" />
+      <updated>%s</updated>
+      <author>
+        <name>Joop Doderer</name>
+      </author>
+      </feed>
+    """ %  (feed_url, feed_url, hub_url,
+            rfc3339_date(datetime.utcnow()))
+
+    # push content in...
+    push_feed_index(feed_url, content, ctx)
+    sleep(.5)
+    
+    # check for automatic subscription...
+    cb = callback_url_for(feed_url, ctx)
+    assert hub.is_verified(cb, feed_url)
+
+    rf = RemoteFeed.lookup_by_url(ctx.db, feed_url)
+    assert rf.hub_info.enabled
+    assert rf.hub_info.hub_url == hub_url
+
+    client.kill()
+    indexer.kill()
+    hub_proc.kill()
+    
+
+def test_push_index_digest():
+    from melk.util.nonce import nonce_str
+    from melkman.db.remotefeed import RemoteFeed
+    from melkman.fetch import push_feed_index
+    from melkman.fetch.worker import FeedIndexer
+    from melkman.green import consumer_loop
+    from eventlet.api import sleep
+    from eventlet.proc import spawn
+    from sha import new as sha1
+
+    ctx = fresh_context()
+
+    # start a feed indexer
+    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+
+    url = 'http://www.example.com/feeds/2'
+    rf = RemoteFeed.create_from_url(url)
+    rf.hub_info.enabled = True
+    rf.save(ctx)
+
+    secret = nonce_str()
+
+    content = random_atom_feed(url, 10)
+    ids = melk_ids_in(content, url)
+
+    hasher = sha1()
+    hasher.update(secret)
+    hasher.update(content)
+    correct_digest = 'sha1=%s' % hasher.hexdigest()
+    wrong_digest = 'wrong digest'
+
+    #
+    # no hub secret is specified on the feed
+    #
+    push_feed_index(url, content, ctx, digest=wrong_digest, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid not in rf.entries
+    push_feed_index(url, content, ctx, digest=None, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid not in rf.entries
+    # even the correct digest fails as no digest has been set 
+    push_feed_index(url, content, ctx, digest=correct_digest, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid not in rf.entries
+
+    #
+    # now set the hub secret
+    #
+    rf.hub_info.secret = secret
+    rf.save(ctx)
+
+    push_feed_index(url, content, ctx, digest=wrong_digest, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid not in rf.entries
+    push_feed_index(url, content, ctx, digest=None, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid not in rf.entries
+
+    # finally, the correct digest should work now...
+    push_feed_index(url, content, ctx, digest=correct_digest, from_hub=True)
+    sleep(.2)
+    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    for iid in ids:
+        assert iid in rf.entries
+
+    indexer.kill()
