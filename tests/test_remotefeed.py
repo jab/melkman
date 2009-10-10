@@ -203,7 +203,7 @@ def test_view_bucket_entries_by_timestamp():
         'descending': True, 
         'include_docs': True
     }
-    sorted_items = [NewsItemRef.from_doc(r.doc, ctx) for r in 
+    sorted_items = [NewsItemRef.from_doc(r.value, ctx) for r in 
                     view_entries_by_timestamp(ctx.db, **query)]
 
     assert len(sorted_items) == 100
