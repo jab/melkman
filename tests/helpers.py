@@ -124,14 +124,14 @@ class DummyItem(Dibject):
         
 def dummy_news_item(d):
     di = DummyItem(dibjectify(d))
-    di.setdefault('author', '')
+    di.setdefault('author', 'Whoever T. Merriweather')
     di.setdefault('item_id', random_id())
     di.setdefault('timestamp', datetime.utcnow())
-    di.setdefault('title', '')
-    di.setdefault('link', '')
-    di.setdefault('source_title', '')
-    di.setdefault('source_url', '')
-    di.setdefault('summary', '')
+    di.setdefault('title', 'The News Title')
+    di.setdefault('link', 'http://example.org/blagosphere?id=12')
+    di.setdefault('source_title', 'The Blags')
+    di.setdefault('source_url', 'http://example.org/blagosphere')
+    di.setdefault('summary', 'abaraljsrs sjrkja rsj klrjewori ew rwa riojweroiwer iowr wre')
     di.setdefault('details', Dibject())
 
     return di
