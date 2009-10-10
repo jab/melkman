@@ -64,10 +64,14 @@ class RemoteFeed(NewsBucket):
 
     document_types = ListField(TextField(), default=['NewsBucket', 'RemoteFeed'])
 
+    def __init__(self, *args, **kw):
+        NewsBucket.__init__(self, *args, **kw)
+        self._updated_news_items = {}
+
     @classmethod
-    def create_from_url(self, url, **kw):
+    def create_from_url(self, url, context, **kw):
         feed_id = self.id_for_url(url)
-        return RemoteFeed(feed_id, url=url, **kw)
+        return RemoteFeed.create(context, feed_id, url=url, **kw)
 
     feed_info = DibjectField()
 
@@ -86,15 +90,24 @@ class RemoteFeed(NewsBucket):
         while len(self.update_history) > MAX_HISTORY:
             self.update_history.pop()
             
-    def update_from_feed(self, content, db, method):
+    def update_from_feed(self, content, method):
         """
         updates this feed from the unparsed feed content given. 
-        n.b. this does NOT save changes to the database immediately!
-
-        returns a list of new/updated NewsItems that should also 
-        be saved if these changes are committed.
         """
-        return _update_feed(self, content, db, method)
+        updated = _update_feed(self, content, self._context, method)
+        self._updated_news_items.update(updated)
+        return len(updated)
+
+    def save(self):
+        try:
+            NewsBucket.save(self)
+        except ResourceConflict:
+            raise
+        finally:
+            # just best effort here, we assume conflicts indicate better
+            # information arrived...
+            self._context.db.update(self._updated_news_items.values())
+            self._updated_news_items = {}
 
     def find_hub_urls(self):
         hub_urls = []
@@ -111,15 +124,13 @@ class RemoteFeed(NewsBucket):
         return melk_id(nurl)
 
     @classmethod
-    def lookup_by_url(cls, db, url):
+    def get_by_url(cls, url, context):
         fid = cls.id_for_url(url)
-        return cls.load(db, fid)
+        return cls.get(fid, context)
 
     @classmethod
-    def lookup_by_urls(cls, db, urls):
-        return cls.lookup_by_ids(db, [cls.id_for_url(u) for u in urls])
-
-
+    def lookup_by_urls(cls, urls, context):
+        return cls.get_by_ids([cls.id_for_url(u) for u in urls], context)
 
 
 view_remote_feeds_by_next_poll_time = ViewDefinition('remote_feed_indices', 'remote_feeds_by_next_poll_time', 
@@ -165,7 +176,7 @@ def _find_updates(db_feed, parsed_feed):
     return updated_items
 
 
-def _update_feed(feed, content, db, method):
+def _update_feed(feed, content, context, method):
     """
     feed - RemoteFeed instance
     updates feed and returns a list of new/updated NewsItems
@@ -195,14 +206,14 @@ def _update_feed(feed, content, db, method):
     for item in updated_items:
         trace = item_trace(item)
         traces[item.melk_id] = trace
-        ref = {'id': item.melk_id}
+        ref = {'item_id': item.melk_id}
         ref.update(trace)
         feed.add_news_item(ref)
     feed.record_update_info(success=True, updates=len(updated_items), method=method)
 
     # grab any existing entries (need revisions to push update)...
     save_items = {}
-    for r in db.view('_all_docs', keys=traces.keys(), include_docs=True).rows:
+    for r in context.db.view('_all_docs', keys=traces.keys(), include_docs=True).rows:
         if 'doc' in r:
             save_items[r.key] = NewsItem.wrap(r.doc)
 
@@ -221,4 +232,4 @@ def _update_feed(feed, content, db, method):
                 setattr(news_item, k, v)
         news_item.details = item
 
-    return save_items.values()
+    return save_items

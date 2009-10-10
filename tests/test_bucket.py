@@ -32,15 +32,16 @@ def test_bucket_add_remove():
     
     # create a bucket
     bucket_id = random_id()
-    bucket = NewsBucket(bucket_id)
+    bucket = NewsBucket.create(ctx, bucket_id)
     item_id = random_id()
-    
+
     # add a random item
     bucket.add_news_item(item_id)
     # make sure it is in the bucket before and after saving
     assert bucket.has_news_item(item_id)
-    bucket.save(ctx)
-    bucket = NewsBucket.load(ctx.db, bucket_id)
+    bucket.save()
+    bucket = NewsBucket.get(bucket_id, ctx)
+    
     assert bucket is not None
     assert bucket.has_news_item(item_id)
     
@@ -48,8 +49,8 @@ def test_bucket_add_remove():
     bucket.remove_news_item(item_id)
     # make sure it is not in the bucket before and after saving
     assert not bucket.has_news_item(item_id)
-    bucket.save(ctx)
-    bucket = NewsBucket.load(ctx.db, bucket_id)
+    bucket.save()
+    bucket = NewsBucket.get(bucket_id, ctx)
     assert not bucket.has_news_item(item_id)
     
 def test_bucket_silent_nodupes():
@@ -59,10 +60,12 @@ def test_bucket_silent_nodupes():
     """
     
     from melkman.db import NewsBucket
+
+    ctx = fresh_context()
     
     # create a bucket and add an item to it
     bucket_id = random_id()
-    bucket = NewsBucket(bucket_id)
+    bucket = NewsBucket.create(ctx, bucket_id)
     item_id = random_id()
     bucket.add_news_item(item_id)
     assert bucket.has_news_item(item_id)
@@ -75,7 +78,7 @@ def test_bucket_silent_nodupes():
     # should be only one in there
     count = 0
     for iid, item in bucket.entries.iteritems():
-        assert item.id == iid
+        assert item.item_id == iid
         if iid == item_id:
             count += 1    
     assert count == 1
@@ -92,11 +95,11 @@ def test_bucket_overwrite_item():
     ctx = fresh_context()
     item_id = random_id()
     
-    info1 = {'id': item_id,
+    info1 = {'item_id': item_id,
              'timestamp': datetime.utcnow(), 
              'title': 'the foo',
              'author': 'jimmy'}
-    info2 = {'id': item_id, 
+    info2 = {'item_id': item_id, 
              'timestamp': datetime.utcnow() + timedelta(seconds=10), 
              'title': 'the bar'}
     
@@ -105,30 +108,22 @@ def test_bucket_overwrite_item():
         assert epeq_datetime(item.timestamp, info['timestamp'])
 
         for k in info:
-            if k in ('timestamp', 'add_time'):
+            if k in ('timestamp'):
                 continue
             if item[k] != info[k]:
                 return False
-        # check that there is no additional info
-        for k in item:
-            if k in ('timestamp', 'id', 'add_time'):
-                continue
-            v = item[k]
-            if v is not None:
-                if not (k in info and info[k] == v):
-                    return False
         return True
     
     # create a bucket and add an item to it with 
     # extra info
     bucket_id = random_id()
-    bucket = NewsBucket(bucket_id)
+    bucket = NewsBucket.create(ctx, bucket_id)
 
     assert bucket.add_news_item(info1) == True
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info1)
-    bucket.save(ctx)
-    bucket = NewsBucket.load(ctx.db, bucket_id)
+    bucket.save()
+    bucket = NewsBucket.get(bucket_id, ctx)
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info1)
     
@@ -138,8 +133,8 @@ def test_bucket_overwrite_item():
     # different info
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
-    bucket.save(ctx)
-    bucket = NewsBucket.load(ctx.db, bucket_id)
+    bucket.save()
+    bucket = NewsBucket.get(bucket_id, ctx)
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
 
@@ -149,15 +144,49 @@ def test_bucket_overwrite_item():
     assert bucket.add_news_item(info1) == False
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
-    bucket.save(ctx)
-    bucket = NewsBucket.load(ctx.db, bucket_id)
+    bucket.save()
+    bucket = NewsBucket.get(bucket_id, ctx)
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
 
     # should be only one in there once
     count = 0
     for iid, item in bucket.entries.iteritems():
-        assert iid == item.id
+        assert iid == item.item_id
         if iid == item_id:
             count += 1    
     assert count == 1
+    
+def test_bucket_save_twice():
+    from melkman.db import NewsBucket
+    ctx = fresh_context()
+
+    bucket = NewsBucket.create(ctx, random_id())
+    bucket.save()
+    bucket.save()
+    
+def test_add_before_save_no_id():
+    from melkman.db import NewsBucket
+    ctx = fresh_context()
+
+    bucket = NewsBucket.create(ctx)
+    bucket.add_news_item('abc')
+    bucket.save()
+    bucket = NewsBucket.get(bucket.id, ctx)
+    assert bucket.has_news_item('abc')
+
+def test_add_from_ref():
+    from melkman.db import NewsBucket
+    ctx = fresh_context()
+
+    bucket = NewsBucket.create(ctx)
+    bucket.add_news_item('abc')
+    bucket.save()
+    bucket = NewsBucket.get(bucket.id, ctx)
+    assert bucket.has_news_item('abc')
+    
+    bucket2 = NewsBucket.create(ctx)
+    bucket2.add_news_item(bucket.entries['abc'])
+    bucket2.save()
+    bucket2 = NewsBucket.get(bucket2.id, ctx)
+    assert bucket.has_news_item('abc')

@@ -21,17 +21,23 @@ from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
 import logging
+from melk.util.nonce import nonce_str
+from melk.util.hash import melk_id
 
 from melkman.db.util import DocumentHelper, MappingField, DibjectField
 from melkman.aggregator.api import notify_bucket_modified
 
-__all__ = ['NewsItem', 'NewsBucket', 'view_bucket_entries_by_timestamp']
+__all__ = ['NewsItem', 'NewsBucket', 'view_entries_by_timestamp', 'view_entries_by_add_time']
 
 log = logging.getLogger(__name__)
 
 class NewsItem(DocumentHelper):
 
     document_types = ListField(TextField(), default=['NewsItem'])
+
+    @property
+    def item_id(self):
+        return self.id
 
     timestamp = DateTimeField(default=datetime.utcnow())
     title = TextField()
@@ -43,15 +49,21 @@ class NewsItem(DocumentHelper):
 
     details = DibjectField()
 
-    def load_full_item(self, db):
+    def load_full_item(self):
         return self
 
-class NewsItemRef(Schema):
+_REPLICATE_FIELDS = ('item_id', 'timestamp', 'title', 'author', 'link', 
+                     'source_title', 'source_url', 'summary')
+
+class NewsItemRef(DocumentHelper):
     """
     A trimmed down version of a NewsItem held inside
     a container.
     """
-    id = TextField()
+    document_types = ListField(TextField(), default=['NewsItemRef'])
+
+    item_id = TextField()
+    bucket_id = TextField()
     timestamp = DateTimeField(default=datetime.utcnow())
     add_time = DateTimeField(default=datetime.utcnow())
     title = TextField()
@@ -61,8 +73,38 @@ class NewsItemRef(Schema):
     source_url = TextField()
     summary = TextField()
     
-    def load_full_item(self, db):
-        return NewsItem.load(db, self.id)
+    def load_full_item(self):
+        return NewsItem.lookup_by_id(self.item_id, self._context)
+
+    def update_from(self, other_item):
+        for field in _REPLICATE_FIELDS:
+            val = getattr(other_item, field)
+            setattr(self, field, val)
+
+    @classmethod
+    def create_from_info(cls, context, bucket_id, **kw):
+        kwa = dict(kw)
+        kwa['id'] = cls.dbid(bucket_id, kw['item_id'])
+        kwa['bucket_id'] = bucket_id
+        instance = cls.create(context, **kwa)
+        return instance
+
+    @classmethod
+    def create_from_item(cls, context, bucket_id, item):
+        kw = dict()
+        kw['id'] = cls.dbid(bucket_id, item.item_id)
+        kw['bucket_id'] = bucket_id
+
+        instance = cls.create(context, **kw)
+        
+        for field in _REPLICATE_FIELDS:
+            instance[field] = item[field]
+
+        return instance
+
+    @classmethod
+    def dbid(cls, bucket_id, item_id):
+        return '%s_%s' % (bucket_id, item_id)
 
 class NewsBucket(DocumentHelper):
 
@@ -71,44 +113,92 @@ class NewsBucket(DocumentHelper):
     title = TextField(default='')
     url = TextField(default='')
 
-    entries = MappingField(DictField(NewsItemRef))
-
     last_modification_date = DateTimeField()
     creation_date = DateTimeField(default=datetime.utcnow)
 
     def __init__(self, *args, **kw):
+        if len(args) == 0 and not 'id' in kw:
+            log.warn("assigning random id to bucket...")
+            args = [melk_id(nonce_str())]
+        
         DocumentHelper.__init__(self, *args, **kw)
-        self._added = {}
+        self._entries = None # lazy load
         self._removed = {}
+        self._updated = {}
+
+
+    @property
+    def entries(self):
+        self._lazy_load_entries()
+        return self._entries
+
+    def _lazy_load_entries(self):
+        if self._entries is not None:
+            return
+        
+        self._entries = {}
+        
+        # not saved in db.
+        if self.id is None or self.rev is None:
+            return
+
+        query = {
+            'startkey': self.id,
+            'endkey': self.id + '0',
+            'include_docs': True,
+        }
+        for r in view_entries(self._context.db, **query):
+            ref = NewsItemRef.from_doc(r.doc, self._context)
+            self._entries[ref.item_id] = ref
 
     def add_news_item(self, item):
+        self._lazy_load_entries()
+
         if isinstance(item, basestring):
-            item = NewsItemRef(id=item)
-        elif not isinstance(item, NewsItemRef):
-            item = NewsItemRef(**item)
+            item = NewsItemRef.create_from_info(self._context, self.id, item_id=item)
+        elif isinstance(item, NewsItem) or isinstance(item, NewsItemRef):
+            item = NewsItemRef.create_from_item(self._context, self.id, item)
+        else:
+            item = NewsItemRef.create_from_info(self._context, self.id, **item)
 
         # if this item has already been added,
         # only consider it an update if the 
         # timestamp is strictly greater than the 
         # timestamp we already have for it.
-        if item.id in self.entries:
-            current_item = self.entries[item.id]
+        if item.item_id in self._entries:
+            current_item = self._entries[item.item_id]
             if item.timestamp is None or item.timestamp <= current_item.timestamp:
                 return False
+            else:
+                current_item.update_from(item)
+                self._updated_item(current_item)
+                return True
 
-        self.entries[item.id] = item
-        self._added_item(self.entries[item.id])
-        return True
+        # if it's currently in the trash, we remove it from 
+        # the trash and unconditionally update it
+        elif item.item_id in self._removed:
+            current_item = self._removed[item.item_id]
+            current_item.update_from(item)
+            self._entries[item.item_id] = current_item
+            self._updated_item(current_item)
+            return True
+
+        # a new item
+        else:
+            self._entries[item.item_id] = item
+            self._updated_item(item)
+            return True
 
     def remove_news_item(self, item):
+        self._lazy_load_entries()
         try:
             if isinstance(item, basestring):
-                self._removed_item(self.entries[item])
-                del self.entries[item]
+                self._removed_item(self._entries[item])
+                del self._entries[item]
                 return True
-            elif hasattr(item_id, 'id'):
-                self._removed_item(self.entries[item.id])
-                del self.entries[item.id]
+            elif hasattr(item_id, 'item_id'):
+                self._removed_item(self._entries[item.item_id])
+                del self._entries[item.item_id]
                 return True
             else:
                 return False
@@ -116,120 +206,138 @@ class NewsBucket(DocumentHelper):
             return False
 
     def has_news_item(self, item):
+        self._lazy_load_entries()
+
         if isinstance(item, basestring):
-            return item in self.entries
-        elif hasattr(item, 'id'):
-            return item.id in self.entries
+            return item in self._entries
+        elif hasattr(item, 'item_id'):
+            return item.item_id in self._entries
         else:
             return False
 
     def filter_entries(self, predicate):
+        self._lazy_load_entries()
+        
         kill_keys = []
-        for (k, v) in self.entries.iteritems():
+        for (k, v) in self._entries.iteritems():
             if not predicate(v):
                 kill_keys.append(k)
         for k in kill_keys:
-            self._removed_item(self.entries[k])
-            del self.entries[k]
+            self._removed_item(self._entries[k])
+            del self._entries[k]
 
         return kill_keys
 
     def clear(self):
-        for item in self.entries.values():
+        self._lazy_load_entries()
+        for item in self._entries.values():
             self._removed_item(item)
-        self.entries = {}
+        self._entries = {}
 
-    def store(self, db):
-        raise NotImplementedError("Use bucket.save(context) instead.")
-
-    def save(self, context):
+    def save(self):
         self.last_modification_date = datetime.utcnow()
-        DocumentHelper.store(self, context.db)
-        self._send_modified(context)
+        
+        updates = [self]
+        
+        try_update = list(self._updated.values())
+        try_delete = list(self._removed.values())
 
-    def _send_modified(self, context):
-        notify_bucket_modified(self, context,
-                               updated_items=self._added.values(),
-                               removed_items=self._removed.values())
-        self._added = {}
+        updates += try_update
+        
+        for item in try_delete:
+            updates.append({'_id': item.id, '_rev': item.rev, '_deleted': True})
+        
+        results = self._context.db.update(updates)
+
+        (main_doc_saved, main_doc_id, main_doc_result) = results.pop(0)
+        if main_doc_saved:
+            self._data.update({"_id": main_doc_id, "_rev": main_doc_result})
+
+        conflicts = False
+
+        successful_updates = []
+        for item in try_update:
+            (ref_saved, ref_id, ref_rev) = results.pop(0)
+            if ref_saved:
+                item._data.update({"_id": ref_id, "_rev": ref_rev})
+                successful_updates.append(item)
+            else:
+                conflicts = True
+
+        successful_deletes = []
+        for item in try_delete:
+            (ref_saved, ref_id, ref_rev) = results.pop(0)
+            if ref_saved:
+                successful_deletes.append(item)
+            else:
+                conflicts = True
+        
+        self._send_modified_event(updated_items=successful_updates,
+                                  removed_items=successful_deletes)
+        self._updated = {}
         self._removed = {}
 
-    def _added_item(self, item):
+        if conflicts:
+            # require reload
+            self._entries = None
+
+        if not main_doc_saved:
+            raise main_doc_result
+
+
+    def _send_modified_event(self, *args, **kw):
+        notify_bucket_modified(self, self._context, **kw)
+
+    def _updated_item(self, item):
         try:
-            del self._removed[item.id]
+            del self._removed[item.item_id]
         except KeyError:
             pass
-        self._added[item.id] = item
+        self._updated[item.item_id] = item
 
     def _removed_item(self, item):
-        try:
-            del self._added[item.id]
-            return
-        except KeyError:
-            pass
-        self._removed[item.id] = item
-
+        updated = self._updated.get(item.item_id, None)
+        if updated is None:
+            self._removed[item.item_id] = item
+        else:
+            del self._updated[item.item_id]
+            # only keep previously saved items in the
+            # removed list.
+            if updated.rev is not None:
+                self._removed[item.item_id] = item
 
 #####################################################################
 # this is a view that indexes the entries in a bucket by timestamp
 #####################################################################
 
-view_bucket_entries_by_timestamp = ViewDefinition('bucket_indices', 'entries_by_timestamp', 
+view_entries = ViewDefinition('bucket_indices', 'entries', 
 '''
 function(doc) {
-    if (doc.document_types && doc.document_types.indexOf("NewsBucket") != -1) {
-        for (item_id in doc.entries) {
-            var item = doc.entries[item_id];
-            emit([doc._id, item.timestamp, item.id], item);
-        }
+    if (doc.document_types && doc.document_types.indexOf("NewsItemRef") != -1) {
+        emit(doc.bucket_id, doc.item_id);
     }
 }
 ''')
 
-view_bucket_entries_by_add_time = ViewDefinition('bucket_indices', 'entries_by_add_time', 
+view_entries_by_timestamp = ViewDefinition('bucket_indices', 'entries_by_timestamp', 
 '''
 function(doc) {
-    if (doc.document_types && doc.document_types.indexOf("NewsBucket") != -1) {
-        for (item_id in doc.entries) {
-            var item = doc.entries[item_id];
-            emit([doc._id, item.add_time, item.id], item);
-        }
+    if (doc.document_types && doc.document_types.indexOf("NewsItemRef") != -1) {
+        emit([doc.bucket_id, doc.timestamp], doc.item_id);
     }
 }
 ''')
 
+view_entries_by_add_time = ViewDefinition('bucket_indices', 'entries_by_add_time', 
+'''
+function(doc) {
+    if (doc.document_types && doc.document_types.indexOf("NewsItemRef") != -1) {
+        emit([doc.bucket_id, doc.add_time], doc.item_id);
+    }
+}
+''')
 
 def bootstrap(db):
-    view_bucket_entries_by_timestamp.sync(db)
-    view_bucket_entries_by_add_time.sync(db)
-
-# def bucket_entries_by_timestamp_query(bucket_id, limit,
-#                                     start_time=None, end_time=None,
-#                                     descending=True):
-#     query = dict(descending=descending, limit=limit)
-#     if descending:
-#         pass
-#     else:
-#         pass
-#     
-# def get_bucket_entries_by_timestamp(bucket_id, limit, start_time=None, end_time=None, descending=True):
-#     """
-#     helper for view_bucket_entries_by_timestamp. 
-#     return NewsItemRefs
-#     
-#     :param limit: return at most this many entries
-#     :param start_time: datetime, if specified, no entries before this date will be returned
-#     :param end_time: datetime, if specified, no entries after this date will be returned
-#     :param descending: if True, return newest entries first, else oldest first
-#     """
-#     query = bucket_entries_by_timestamp_query(bucket_id, limit,
-#                                             start_time=start_time, end_time=end_time,
-#                                             descending=descending)
-#     return [NewsItemRef.wrap(r.value) for r in view_entries_by_timestamp(query)]
-# 
-# def iter_bucket_entries_by_timestamp(bucket_id, limit, start_time=None, end_time=None, descending=True):
-#     pass
-
-# views needed:
-# lastest entries
-# random entries ?
+    view_entries.sync(db)
+    view_entries_by_timestamp.sync(db)
+    view_entries_by_add_time.sync(db)
