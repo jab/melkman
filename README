@@ -8,4 +8,116 @@ Requirements:
 Python
 CouchDB  - http://couchdb.apache.org/
 RabbitMQ - http://www.rabbitmq.com/
- 
+
+
+==================
+QuickStart
+==================
+
+There isn't much of an interface on top of things right now, 
+put there are some ways to poke around...
+
+Setting up
+==========
+
+Starting Other stuff
+--------------------
+make sure couchdb and rabbitmq are running...
+
+
+Set up rabbitmq users / virtual hosts 
+--------------------------------------
+A few rabbit specific commands need to be run to 
+set things up.  If you adjust the defaults, 
+be sure to also change your configuration yaml 
+file to reflect the changes as well as 
+tests/test.yaml
+
+$ cd melkman/scripts
+$ ./setup_rabbit.sh
+...
+
+
+Running tests
+-------------
+if you don't have nose, easy_install nose.
+
+$ cd melkman/tests
+$ nosetests -s
+.........................
+
+
+Bootstrap database and plugins
+------------------------------
+To create the necessary databases, views and 
+rabbit queues, you can run the bootstrap operation on the 
+current setup defined in your configuration yaml.  
+The package contains some sensible defaults.
+
+
+$ cd melkman/scripts
+$ python ./shell.py ../dev.yaml
+
+Melkman Interactive Shell
+...
+You may access the current context as "ctx"
+>>> ctx.bootstrap()
+...
+
+
+Doing Something
+===============
+
+Running the test engine
+-----------------------
+The test engine runs all of the engine's 
+services in one monolithic process.
+
+$ cd melkman/scripts
+$ python ./monobrain.py ../dev.yaml
+...
+
+
+Interacting with the engine
+---------------------------
+Basically this means a python prompt atm :/ 
+
+$ cd melkman/scripts
+$ python ./shell.py ../dev.yaml
+
+Melkman Interactive Shell
+...
+You may access the current context as "ctx"
+
+>>> url = "'http://rss.slashdot.org/Slashdot/slashdot"
+
+>>> from melkman.fetch import request_feed_index
+>>> request_feed_index(url, ctx)
+
+>>> from melkman.db import RemoteFeed
+>>> slashdot = RemoteFeed.lookup_by_url(ctx.db, url)
+
+>>> slashdot.entries.values()[0].title
+u"Something disastrous is happening to the internets"
+
+Creating an aggregation
+-----------------------
+
+>>> from melkman.db import Composite
+>>> my_feeds = Composite()
+>>> my_feeds.subscribe(slashdot)
+>>> my_feeds.save(ctx)
+
+>>> my_feeds = Composite.load(ctx.db, my_feeds.id)
+>>> my_feeds.entries.values()[0].title
+u"Something disastrous is happening to the internets"
+
+>>> url = "http://www.nytimes.com/services/xml/rss/nyt/HomePage.xml" 
+>>> nytimes = RemoteFeed.create_from_url(url)
+>>> nytimes.save(ctx)
+>>> my_feeds.subscribe(nytimes)
+>>> my_feeds.save(ctx)
+
+>>> my_feeds = Composite.load(ctx.db, my_feeds.id)
+>>> my_feeds.entries.values()[0].title
+u"Something disastrous is happening to the earths"

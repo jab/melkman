@@ -76,7 +76,7 @@ class RemoteFeed(NewsBucket):
     poll_in_progress = BooleanField(default=False)
     poll_start_time = DateTimeField()
 
-    # pubsubhubbub info
+    # current pubsubhubbub info
     hub_info = DictField(HubInfo)
     
     update_history = ListField(DictField(schema=HistoryItem))
@@ -95,6 +95,15 @@ class RemoteFeed(NewsBucket):
         be saved if these changes are committed.
         """
         return _update_feed(self, content, db, method)
+
+    def find_hub_urls(self):
+        hub_urls = []
+        for link in self.feed_info.get('links', []):
+            if link.get('rel', '').lower() == 'hub':
+                href = link.get('href', '')
+                if href:
+                    hub_urls.append(href)
+        return hub_urls
 
     @classmethod
     def id_for_url(cls, url):
@@ -179,7 +188,7 @@ def _update_feed(feed, content, db, method):
     # update feed metadata
     feed.feed_info = deepcopy(fp.feed)
     feed.title = fp.feed.get('title', '')
-
+    
     # add item to RemoteFeed, gather ids
     iids = []
     traces = {}

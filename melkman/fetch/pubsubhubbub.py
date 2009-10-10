@@ -1,4 +1,5 @@
 import logging
+from giblets import Component, implements
 from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
 from httplib2 import Http
@@ -6,8 +7,17 @@ import traceback
 from urllib import quote_plus, urlencode
 from webob import Request, Response
 
+try:
+    from hashlib import sha1 # python > 2.5
+except ImportError:
+    from sha import new as sha1 # python <= 2.5
+
+from melkman.context import IContextConfigurable
 from melkman.db import RemoteFeed
+from melkman.db.util import backoff_save
 from melkman.fetch.api import push_feed_index
+from melkman.fetch.api import IndexRequestFilter
+from melkman.fetch.api import PostIndexAction
 from melk.util.nonce import nonce_str
 
 log = logging.getLogger(__name__)
@@ -23,17 +33,24 @@ def topic_url_for(feed):
             return link.href
     return None
 
-def make_sub_request(feed, context):
+def hubbub_sub(feed, context, hub_url=None):
     topic_url = topic_url_for(feed)
     
     if topic_url is None:
         raise ValueError('No self link found in feed, cannot subscribe via pubsubhubub.')
 
-    if feed.hub_info.enabled == False:
-        feed.hub_info.enabled = True
-        feed.hub_info.verify_token = nonce_str()
-        feed.hub_info.secret = nonce_str()
-        feed.save(context)
+    if hub_url is None:
+        hub_urls = feed.find_hub_urls()
+        if len(hub_urls) == 0:
+            raise ValueError("Cannot subscribe, no hubs were specified.")
+        hub_url = hub_urls[0]
+        log.warn("Guessing hub %s for %s" % (hub_url, feed.url))
+
+    feed.hub_info.enabled = True
+    feed.hub_info.hub_url = hub_url
+    feed.hub_info.verify_token = nonce_str()
+    feed.hub_info.secret = nonce_str()
+    feed.save(context)
 
     cb = callback_url_for(feed.url, context)
     req = {
@@ -48,8 +65,8 @@ def make_sub_request(feed, context):
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
-    
-def make_unsub_request(feed, context):
+        
+def hubbub_unsub(feed, context):
 
     topic_url = topic_url_for(feed)
     
@@ -162,4 +179,82 @@ class WSGISubClient(object):
         url = req.GET.get('url', None)
         digest = req.headers.get('X-Hub-Signature', None)
         content = req.body
-        push_feed_index(url, content, self.context, digest=digest, from_hub=True)
+        push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
+
+class HubAutosubscriber(Component):
+    implements(PostIndexAction, IContextConfigurable)
+
+    def feed_reindexed(self, feed, context):
+        if not feed.hub_info.enabled:
+            hubs = feed.find_hub_urls()
+            if len(hubs) > 0:
+                _sub_any(feed, hubs, self.context)
+
+    def set_context(self, context):
+        self.context = context
+
+def _sub_any(feed, hubs, context):
+    """
+    suscribe to any hub in the list of hubs given that
+    works. 
+    """
+    for hub in hubs:
+        try:
+            # use exponential backoff method to avoid
+            # conflicts when setting up.
+            log.debug("Trying to subscribe to %s at hub %s" % (feed.url, hub))
+            def try_sub(tries):
+                if tries > 1:
+                    ff = RemoteFeed.load(context.db, feed.id)
+                else:
+                    ff = feed
+                return hubbub_sub(ff, context, hub_url=hub)
+            r, c = backoff_save(try_sub, pass_count=True)
+            
+            if r.status >= 200 and r.status < 300:
+                log.info("Subscribed to %s at hub %s (%d)" % (feed.url, hub, r.status))
+                return
+            else: 
+                log.info("Failed to subscribe to %s at hub %s (%d)" % (feed.url, hub, r.status))
+        except: 
+            log.error("Failed to subscribe to %s at hub %s: %s" % (feed.url, hub, traceback.format_exc()))
+
+class HubPushValidator(Component):
+    """
+    validates requests that are pushed from 
+    a pubsubhubbub hub.
+    """
+    implements(IndexRequestFilter)
+
+    def accepts_request(self, feed, request, context):
+        # only validate requests marked as from a hub
+        if not request.get('from_hub', False) == True:
+            return True
+
+        content = request.get('content', '')
+        if not feed.hub_info.enabled:
+            log.warn("Ignoring hub push for unsubscribed feed.")
+            return False
+
+        if 'digest' in request:
+            if not _digest_matches(request['digest'], content, feed.hub_info.secret):
+                log.warn("Rejecting content push: digest (%s) did not match!" % request['digest'])
+                return False
+
+        return True
+
+def _digest_matches(digest, content, secret):
+
+    if not secret or not digest or not content:
+        return False
+
+    if not digest.startswith("sha1="):
+        return False
+
+    digest = digest[5:]
+
+    hasher = sha1()
+    hasher.update(secret)
+    hasher.update(content)
+
+    return hasher.hexdigest() == digest

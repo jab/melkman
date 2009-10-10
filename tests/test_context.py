@@ -2,14 +2,6 @@ import os
 from helpers import *
 
 
-
-def test_context_from_ini():
-    from melkman.context import Context
-    ctx = Context.from_ini(os.path.join(data_path(), "test_context_from_ini.ini"))
-    
-    assert ctx.config['a.b.c'].foo == 'bar'
-    assert ctx.config.test.foo.bar.quux == 'flup'
-    
 def test_context_bootstrap_plugins():
     from giblets import Component, implements
     from melkman.context import Context, IRunDuringBootstrap
@@ -23,8 +15,10 @@ def test_context_bootstrap_plugins():
         def bootstrap(self, context, purge=False):
             FooComponent.did_bootstrap += 1
 
-    config = {"test_context.FooComponent": {"plugin_enabled": True}}
-    ctx = Context.from_dict(config, defaults=Context.from_ini(test_ini_file()).config)
+    config = {
+        'plugins': [{'pattern': "test_context.FooComponent", "enabled": True}]
+    }
+    ctx = Context.from_dict(config, defaults=Context.from_yaml(test_yaml_file()).config)
     
     ctx.bootstrap(purge=False)
     
@@ -54,12 +48,13 @@ def test_context_components():
         bazoo = ExtensionPoint(IBaz)
 
 
+
     config = """
         {
-        "test_context.FooComponent": {"enabled": true},
-        "test_context.BarComponent": {"enabled": false},
-        "test_context.BazHolder": {"enabled": true},
-        "unrelated.OtherJunk": {"abc": 123}
+        "plugins": [
+            {"pattern": "test_context.FooComponent", "enabled": true},
+            {"pattern": "test_context.BarComponent", "enabled": false},
+            {"pattern": "test_context.BazHolder", "enabled": true}]
         }
     """
     
