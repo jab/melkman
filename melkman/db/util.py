@@ -9,9 +9,49 @@ log = logging.getLogger(__name__)
 
 class DocumentHelper(Document):
     
+    def __init__(self, *args, **kw):
+        Document.__init__(self, *args, **kw)
+        self._context = None
+
+    def set_context(self, context):
+        self._context = context
+
     @classmethod
-    def lookup_by_ids(cls, db, ids):
-        return cls.view(db, '_all_docs', keys=ids, include_docs=True)
+    def create(cls, context, *args, **kw):
+        instance = cls(*args, **kw)
+        instance.set_context(context)
+        return instance
+
+    @classmethod
+    def from_doc(cls, doc, context):
+        instance = cls.wrap(doc)
+        instance.set_context(context)
+        return instance
+
+    @classmethod
+    def get(cls, id, ctx):
+        doc = ctx.db.get(id)
+        if doc is None:
+            return None
+        instance = cls.wrap(doc)
+        instance.set_context(ctx)
+        return instance
+
+    @classmethod
+    def get_by_ids(cls, ids, ctx):
+        for instance in cls.view(db, '_all_docs', keys=ids, include_docs=True):
+            instance.set_context(ctx)
+            yield instance
+
+    def load(self, db, id):
+        raise NotImplementedError("Use get(id, context) instead.")
+
+    def save(self):
+        Document.store(self, self._context.db)
+
+    def store(self, db):
+        raise NotImplementedError("Use save(context) instead.")
+    
     
 SUPPORTED_BATCH_QUERY_ARGS = set(['startkey', 'endkey', 'skip', 'descending', 'include_docs', 'limit'])
 def batched_view_iter(db, view, batch_size, **kw):

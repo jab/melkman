@@ -32,13 +32,13 @@ def test_index_request():
     try:
         test_url = ts.url_for('good.xml')
     
-        assert RemoteFeed.lookup_by_url(ctx.db, test_url) is None
+        assert RemoteFeed.get_by_url(test_url, ctx) is None
     
         # make an index request...
         request_feed_index(test_url, ctx)
         sleep(.2)
     
-        rf = RemoteFeed.lookup_by_url(ctx.db, test_url)
+        rf = RemoteFeed.get_by_url(test_url, ctx)
         assert rf is not None
         assert len(rf.entries.keys()) == 2
         
@@ -73,7 +73,7 @@ def test_schedule_index():
     test_url = ts.url_for('good.xml')
     # schedule an index request...
     try:
-        assert RemoteFeed.lookup_by_url(ctx.db, test_url) is None
+        assert RemoteFeed.get_by_url(test_url, ctx) is None
 
         # make an index request...
         when = datetime.utcnow() + timedelta(seconds=2)
@@ -81,7 +81,7 @@ def test_schedule_index():
         schedule_feed_index(test_url, when, ctx)
         sleep(3)
 
-        rf = RemoteFeed.lookup_by_url(ctx.db, test_url)
+        rf = RemoteFeed.get_by_url(test_url, ctx)
         assert rf is not None
         assert len(rf.entries.keys()) == 2
     except:
@@ -111,7 +111,7 @@ def test_push_index():
     push_feed_index(url, content, ctx)
     sleep(.2)
     
-    rf = RemoteFeed.lookup_by_url(ctx.db, url)
+    rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid in rf.entries
 

@@ -22,12 +22,12 @@ def test_modified_updates_composite():
     c = []
     # make some buckets and composites. 
     for i in range(3):
-        bucket = NewsBucket()
-        bucket.save(ctx)
+        bucket = NewsBucket.create(ctx)
+        bucket.save()
         b.append(bucket)
      
-        comp = Composite()
-        comp.save(ctx)
+        comp = Composite.create(ctx)
+        comp.save()
         c.append(comp)
     
     # set up some subscriptions
@@ -36,17 +36,17 @@ def test_modified_updates_composite():
     c[2].subscribe(c[0])
     c[2].subscribe(c[1])
     for i in range(3):
-        c[i].save(ctx)
+        c[i].save()
         
     id1 = random_id()
     b[0].add_news_item(id1)
     log.debug("updating bucket 0 (%s) with item %s..." % (b[0].id, id1))
-    b[0].save(ctx)
+    b[0].save()
     sleep(1)
     
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.load(ctx.db, c[i].id)
+        c[i] = Composite.get(c[i].id, ctx)
     
     assert c[0].has_news_item(id1)
     assert not c[1].has_news_item(id1)
@@ -55,12 +55,12 @@ def test_modified_updates_composite():
     id2 = random_id()
     b[1].add_news_item(id2)
     log.debug("updating bucket 1 (%s) with item %s..." % (b[1].id, id2))
-    b[1].save(ctx)
+    b[1].save()
     sleep(1)
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.load(ctx.db, c[i].id)
+        c[i] = Composite.get(c[i].id, ctx)
     
     assert not c[0].has_news_item(id2)
     assert c[1].has_news_item(id2)
@@ -69,12 +69,12 @@ def test_modified_updates_composite():
     id3 = random_id()
     b[2].add_news_item(id3)
     log.debug("updating bucket 2 (%s) with item %s..." % (b[2].id, id3))
-    b[2].save(ctx)
+    b[2].save()
     sleep(1)
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.load(ctx.db, c[i].id)
+        c[i] = Composite.get(c[i].id, ctx)
 
     assert not c[0].has_news_item(id3)
     assert not c[1].has_news_item(id3)
@@ -100,29 +100,29 @@ def test_sub_loop_sane():
 
     # create two composites and subscribe them 
     # to each other... O_O
-    c1 = Composite()
-    c2 = Composite()
-    c1.save(ctx)
-    c2.save(ctx)
+    c1 = Composite.create(ctx)
+    c2 = Composite.create(ctx)
+    c1.save()
+    c2.save()
     
     c1.subscribe(c2)
     c2.subscribe(c1)
     
-    c1.save(ctx)
-    c2.save(ctx)
+    c1.save()
+    c2.save()
 
     for i in range(10):
         c1.add_news_item(random_id())    
         c2.add_news_item(random_id())
 
-    c1.save(ctx)
-    c2.save(ctx)
+    c1.save()
+    c2.save()
 
     sleep(1)
 
     # refresh
-    c1 = Composite.load(ctx.db, c1.id)
-    c2 = Composite.load(ctx.db, c2.id)
+    c1 = Composite.get(c1.id, ctx)
+    c2 = Composite.get(c2.id, ctx)
 
     assert len(c1.entries) == 20
     assert len(c2.entries) == 20
