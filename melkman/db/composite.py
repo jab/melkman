@@ -129,6 +129,11 @@ class Composite(NewsBucket):
             
         self._removed_subs.add(bucket_id)
 
+    def delete(self):
+        NewsBucket.delete(self)
+        if self._rejected is not None:
+            self._rejected.delete()
+
 view_composites_by_subscription = ViewDefinition('composite_indices', 'composites_by_subscription', 
 '''
 function(doc) {

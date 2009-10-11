@@ -176,7 +176,7 @@ def test_add_before_save_no_id():
     assert bucket.has_news_item('abc')
 
 def test_add_from_ref():
-    from melkman.db import NewsBucket
+    from melkman.db import NewsBucket, NewsItemRef
     ctx = fresh_context()
 
     bucket = NewsBucket.create(ctx)
@@ -190,3 +190,29 @@ def test_add_from_ref():
     bucket2.save()
     bucket2 = NewsBucket.get(bucket2.id, ctx)
     assert bucket.has_news_item('abc')
+
+def test_bucket_delete():
+    from melkman.db import NewsBucket, NewsItemRef
+    ctx = fresh_context()
+
+    bucket = NewsBucket.create(ctx)
+    items = [random_id() for i in range(1000)]
+    for iid in items:
+        bucket.add_news_item(iid)
+    bucket.save()
+    
+    bucket_id = bucket.id
+    ref_ids = []
+    assert bucket_id in ctx.db
+    for iid in items:
+        assert iid in bucket.entries
+        ref_id = NewsItemRef.dbid(bucket.id, iid)
+        ref_ids.append(ref_id)
+        assert ref_id in ctx.db
+        
+    # now destroy!
+    bucket.delete()
+    assert not bucket_id in ctx.db
+    for ref_id in ref_ids:
+        assert not ref_id in ctx.db
+    
