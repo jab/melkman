@@ -49,13 +49,10 @@ def test_update_feed_repeat_index():
     for iid in ids:
         assert feed.has_news_item(iid)
     
-    last_mod = feed.last_modification_date
-
     # update again with identical content,
     # should have no effect.
     updates = feed.update_from_feed(content, method='test')
     assert updates == 0
-    assert last_mod == feed.last_modification_date
     
     feed.save()
 
@@ -65,7 +62,7 @@ def test_update_feed_repeat_index():
     # should have no effect.
     updates = feed.update_from_feed(content, method='test')
     assert updates == 0
-    assert last_mod == feed.last_modification_date
+
 
 
 def test_update_feed_partial_repeat():
@@ -209,6 +206,38 @@ def test_view_bucket_entries_by_timestamp():
     assert len(sorted_items) == 100
     for i, item in enumerate(sorted_items):
         assert item.item_id == items[i][0]
+        
+def test_delete():
+    from melkman.db import RemoteFeed, NewsItem, NewsItemRef
+    ctx = fresh_context()
+
+    feed_url = 'http://example.org/feeds/1'
+    dummy_feed = random_atom_feed(feed_url, 25)
+    items = melk_ids_in(dummy_feed, feed_url)
+
+    rf = RemoteFeed.create_from_url(feed_url, ctx)
+    rf.update_from_feed(dummy_feed, 'test')
+    rf.save()
+    
+    bucket_id = rf.id
+    ref_ids = []
+    assert bucket_id in ctx.db
+    for iid in items:
+        assert iid in rf.entries
+        ref_id = NewsItemRef.dbid(bucket_id, iid)
+        ref_ids.append(ref_id)
+        assert ref_id in ctx.db
+        # a news item was created too...
+        assert iid in ctx.db
+
+        
+    # now destroy!
+    rf.delete()
+    assert not bucket_id in ctx.db
+    for ref_id in ref_ids:
+        assert not ref_id in ctx.db
+    for iid in items:
+        assert not iid in ctx.db
 
 # missing:
 # test history entries

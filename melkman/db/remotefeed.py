@@ -118,6 +118,21 @@ class RemoteFeed(NewsBucket):
                     hub_urls.append(href)
         return hub_urls
 
+    def delete(self):
+        dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
+        news_items = []
+        self._entries = None
+        self._lazy_load_entries()
+        for e in self._entries.values():
+            dels.append({'_id': e.id, '_rev': e.rev, '_deleted': True})
+            news_items.append(e.item_id)
+
+        for r in self._context.db.view('_all_docs', keys=news_items, include_docs=True):
+            dels.append({'_id': r.doc['_id'], '_rev': r.doc['_rev'], '_deleted': True})
+
+        self._context.db.update(dels)
+
+
     @classmethod
     def id_for_url(cls, url):
         nurl = canonical_url(url).lower()
@@ -131,6 +146,8 @@ class RemoteFeed(NewsBucket):
     @classmethod
     def lookup_by_urls(cls, urls, context):
         return cls.get_by_ids([cls.id_for_url(u) for u in urls], context)
+
+
 
 
 view_remote_feeds_by_next_poll_time = ViewDefinition('remote_feed_indices', 'remote_feeds_by_next_poll_time', 

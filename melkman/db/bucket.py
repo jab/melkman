@@ -305,7 +305,16 @@ class NewsBucket(DocumentHelper):
             # removed list.
             if updated.rev is not None:
                 self._removed[item.item_id] = item
+    
+    def delete(self):
+        dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
+        self._entries = None
+        self._lazy_load_entries()
+        for e in self._entries.values():
+            dels.append({'_id': e.id, '_rev': e.rev, '_deleted': True})
+        self._context.db.update(dels)
 
+        
 #####################################################################
 # this is a view that indexes the entries in a bucket by timestamp
 #####################################################################

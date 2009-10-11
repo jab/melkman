@@ -51,7 +51,9 @@ class DocumentHelper(Document):
 
     def store(self, db):
         raise NotImplementedError("Use save(context) instead.")
-    
+
+    def delete(self):
+        del self._context.db[self.id]
     
 SUPPORTED_BATCH_QUERY_ARGS = set(['startkey', 'endkey', 'skip', 'descending', 'include_docs', 'limit'])
 def batched_view_iter(db, view, batch_size, **kw):
