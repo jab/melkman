@@ -4,6 +4,7 @@ from couchdb.schema import *
 from giblets import Component, implements
 import logging
 from melk.util.hash import melk_id
+import re
 from tweetstream import TweetStream
 import urllib
 
@@ -143,22 +144,120 @@ class BasicSorter(object):
         if self.matches(tweet):
             pass
 
-class KeywordSorter(BasicSorter):
+PUNC = re.compile('[^a-zA-Z0-9]+')
+def no_punc(x):
+    return re.sub(PUNC, ' ', x).strip()
 
+class TrackSorter(BasicSorter):
+    """
+    From: http://apiwiki.twitter.com/Streaming-API-Documentation#track
+
+    Terms are exact-matched, and also exact-matched ignoring punctuation. Phrases,
+    keywords with spaces, are not supported. Keywords containing punctuation will
+    only exact match tokens.
+
+    Track examples: The keyword Twitter will match all public statuses with the
+    following comma delimited tokens in their text field: TWITTER, twitter, "Twitter", 
+    twitter., #twitter and @twitter. The following tokens will not be matched: 
+    TwitterTracker and http://www.twitter.com,  The phrase, excluding quotes, 
+    "hard alee" won't match anything.  The keyword "helm's-alee" will match helm's-alee
+    but not #helm's-alee.
+    
+    >>> ts = TrackSorter('Twitter', 'test')
+    >>> ts.matches({'text': 'I use teh TWITTER all day'})
+    True
+    >>> ts.matches({'text': 'I use teh twitter all day'})
+    True
+    >>> ts.matches({'text': 'I use teh "Twitter" all day'})
+    True
+    >>> ts.matches({'text': 'I use teh twitter. all day'})
+    True
+    >>> ts.matches({'text': 'I use teh #twitter all day'})
+    True
+    >>> ts.matches({'text': 'I use teh @twitter all day'})
+    True
+    >>> ts.matches({'text': 'I use teh TwitterTracker all day'})
+    False
+    >>> ts.matches({'text': 'I use teh http://www.twitter.com all day'})
+    False
+    
+    >>> ts =  TrackSorter('hard alee', 'test')
+    >>> ts.matches({'text': 'hard alee'})
+    False
+    >>> ts.matches({'text': 'hardalee'})
+    False
+    >>> ts.matches({'text': 'hard-alee'})
+    False
+    
+    >>> ts =  TrackSorter("helm's-alee", 'test')
+    >>> ts.matches({'text': "Quick capn, helm's-alee gyarr!"})
+    True
+    >>> ts.matches({'text': "Quick capn, #helm's-alee gyarr!"})
+    False
+    """
     def __init__(self, keyword, bucket_id):
         BasicSorter.__init__(self, bucket_id)
-        self.keyword = keyword
+        self.keyword = keyword.lower()
+        self.kw_has_whitespace = len(keyword.split()) > 1
+        self.kw_has_punc = no_punc(self.keyword) != self.keyword
         
     def matches(self, tweet):
-        pass
+        if self.kw_has_whitespace:
+            return False
+
+        words = [x.lower() for x in tweet.get('text', '').split()]
+        if self.keyword in words:
+            return True
+
+        if not self.kw_has_punc:
+            return self.keyword in [no_punc(x) for x in words]
+        else:
+            return False
 
 class FollowSorter(BasicSorter):
+    """
+    From: http://apiwiki.twitter.com/Streaming-API-Documentation#follow
+    References matched are statuses that were:
+    * Created by a specified user
+    * Explicitly in-reply-to a status created by a specified user 
+      (pressed reply "swoosh" button)
+    * Explicitly retweeted by a specified user (pressed retweet button)
+    * Created by a specified user and subsequently explicitly retweed by any user
+
+    References unmatched are statuses that were:
+    * Mentions ("Hello @user!")
+    * Implicit replies ("@user Hello!", created without pressing a reply "swoosh" 
+      button to set the in_reply_to field)
+    * Implicit retweets ("RT @user Says Helloes" without pressing a retweet button)
+    
+    >>> fs = FollowSorter('123', 'test')
+    >>> fs.matches({'user': {'id': '123'}})
+    True
+    >>> fs.matches({'in_reply_to_user_id': '123'})
+    True
+    >>> fs.matches({'retweet_details': {'retweeting_user': {'id': '123'}}})
+    True
+    >>> fs.matches({'text': 'yo @123'})
+    False
+    >>> fs.matches({'text': '@123 yo!!!'})
+    False
+    >>> fs.matches({'text': 'RT @123 I am the balm'})
+    False
+    """
     def __init__(self, userid, bucket_id):
         BasicSorter.__init__(self, bucket_id)
         self.userid = userid
 
     def matches(self, tweet):
-        pass
+        if not self.userid:
+            return False
+
+        if (str(tweet.get('user', {}).get('id')) == self.userid or
+            str(tweet.get('in_reply_to_user_id')) == self.userid or
+            str(tweet.get('retweet_details', {}).get('retweeting_user', {}).get('id')) == self.userid):
+            return True
+        
+        return False
 
 class TweetSorter(object):
     
@@ -171,7 +270,7 @@ class TweetSorter(object):
     def create_sorter(self, filt_type, value, id):
         # ? Extensible...
         if filt_type == 'track':
-            return KeywordSorter(value, r.id)
+            return TrackSorter(value, r.id)
         elif filt_type == 'follow':
             return FollowSorter(value, r.id)
         else:
@@ -206,3 +305,7 @@ class TweetSorterConsumer(TweetConsumer):
         follow_bucket = TweetBucket.get_by_follow(author_id)
         if follow_bucket is not None:
             follow_bucket.add_news_item(item)
+            
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
