@@ -215,4 +215,33 @@ def test_bucket_delete():
     assert not bucket_id in ctx.db
     for ref_id in ref_ids:
         assert not ref_id in ctx.db
+
+def test_immediate_add():
+    from melkman.db.bucket import NewsBucket, immediate_add, view_entries
+    ctx = fresh_context()
+    
+    bucket = NewsBucket.create(ctx)
+    bucket.save()
+
+    items = []
+    for i in range(10):
+        iid = random_id()
+        immediate_add(bucket, iid, ctx)
+        items.append(iid)
+    
+    # check what's in the database directly...
+    query = {
+        'startkey': bucket.id,
+        'endkey': bucket.id + 'z'
+    }
+    bucket_items = [r.value for r in view_entries(ctx.db, **query)]
+    
+    for item in items:
+        assert item in bucket_items
+    for item in bucket_items:
+        assert item in items
+    
+    # it should also show up in the bucket.
+    for item in items:
+        assert bucket.has_news_item(item)
     

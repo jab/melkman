@@ -17,6 +17,7 @@
 # Boston, MA  02110-1301
 # USA
 
+from couchdb import ResourceConflict
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
@@ -27,7 +28,11 @@ from melk.util.hash import melk_id
 from melkman.db.util import DocumentHelper, MappingField, DibjectField
 from melkman.aggregator.api import notify_bucket_modified
 
-__all__ = ['NewsItem', 'NewsBucket', 'view_entries_by_timestamp', 'view_entries_by_add_time']
+__all__ = ['NewsItem', 'NewsBucket',
+           'immediate_add',
+           'view_entries',
+           'view_entries_by_timestamp',
+           'view_entries_by_add_time']
 
 log = logging.getLogger(__name__)
 
@@ -272,8 +277,12 @@ class NewsBucket(DocumentHelper):
             else:
                 conflicts = True
         
-        self._send_modified_event(updated_items=successful_updates,
-                                  removed_items=successful_deletes)
+        kw = {}
+        if len(successful_updates) > 0:
+            kw['updated_items'] = [x.unwrap() for x in successful_updates]
+        if len(successful_deletes) > 0:
+            kw['removed_items'] = [x.unwrap() for x in successful_deletes]
+        self._send_modified_event(**kw)
         self._updated = {}
         self._removed = {}
 
@@ -306,6 +315,20 @@ class NewsBucket(DocumentHelper):
             if updated.rev is not None:
                 self._removed[item.item_id] = item
     
+    def _clobber(self, item):
+        if self._entries is not None:
+            self._entries[item.item_id] = item
+
+        try:
+            del self._removed[item.item_id]
+        except KeyError: 
+            pass
+            
+        try:
+            del self._updated[item.item_id]
+        except KeyError:
+            pass
+
     def delete(self):
         dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
         self._entries = None
@@ -314,7 +337,45 @@ class NewsBucket(DocumentHelper):
             dels.append({'_id': e.id, '_rev': e.rev, '_deleted': True})
         self._context.db.update(dels)
 
+
+def immediate_add(bucket, item, context, notify=True):
+    """
+    immediately commit the addition of an item to the 
+    specified bucket to the database.
+    
+    if notify is False, it is the caller's responsibility to 
+    issue notification of *successful* additions.
+    
+    note, this will clobber any unsaved changes in the 
+    bucket for this item.
+    """
+    if isinstance(item, basestring):
+        item = NewsItemRef.create_from_info(context, bucket.id, item_id=item)
+    elif isinstance(item, NewsItem) or isinstance(item, NewsItemRef):
+        item = NewsItemRef.create_from_item(context, bucket.id, item)
+    else:
+        item = NewsItemRef.create_from_info(context, bucket.id, **item)
+
+    current_item = NewsItemRef.get(item.id, context)
+    if current_item is None:
+        current_item = item
+    elif item.timestamp is None or item.timestamp <= current_item.timestamp:
+        return False
+    else:
+        current_item.update_from(item)
+    
+    try:
+        current_item.save()
+        bucket._clobber(current_item)        
         
+        if notify == True:
+            notify_bucket_modified(bucket, context, updated_items=[current_item.unwrap()])
+
+        return True
+    except ResourceConflict:
+        return False
+    
+
 #####################################################################
 # this is a view that indexes the entries in a bucket by timestamp
 #####################################################################
