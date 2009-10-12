@@ -54,7 +54,7 @@ def request_feed_index(url, context, priority=0, skip_reschedule=False):
     if skip_reschedule:
         message['skip_reschedule'] = True
     publisher = FeedIndexerPublisher(context.broker)
-    publisher.send({'url': url}, priority=priority)
+    publisher.send(message, priority=priority)
     publisher.close()
 
 def schedule_feed_index(url, timestamp, context, message_id=None, skip_reschedule=False):
