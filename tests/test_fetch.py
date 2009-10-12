@@ -116,3 +116,4 @@ def test_push_index():
         assert iid in rf.entries
 
     indexer.kill()    
+

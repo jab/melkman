@@ -91,3 +91,4 @@ def test_deferred_send_receive():
     sched.kill()
     cons.kill()
     ctx.close()
+

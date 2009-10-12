@@ -258,3 +258,4 @@ def _digest_matches(digest, content, secret):
     hasher.update(content)
 
     return hasher.hexdigest() == digest
+

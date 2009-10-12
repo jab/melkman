@@ -480,3 +480,4 @@ def test_push_index_digest():
         assert iid in rf.entries
 
     indexer.kill()
+

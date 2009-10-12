@@ -29,3 +29,4 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     
     profile_bucket_saves()
+
