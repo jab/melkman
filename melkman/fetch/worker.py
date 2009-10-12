@@ -48,25 +48,20 @@ def index_feed_push(url, content, context, request_info=None):
     if request_info is None:
         request_info = {}
 
-    feed = RemoteFeed.lookup_by_url(context.db, url)
+    feed = RemoteFeed.get_by_url(url, context)
 
     updated_docs = []
     if feed is None:
-        feed = RemoteFeed.create_from_url(url)
+        feed = RemoteFeed.create_from_url(url, context)
 
     if check_request_approved(feed, request_info, context) == False:
         log.warn("Rejected index request for %s" % url)
         return 
 
-    # 200 status code, not from cache, do update...
-    updated_docs += feed.update_from_feed(content, context.db, method=METHOD_PUSH)
-    updated_docs.append(feed)
-    context.db.update(updated_docs)
 
-    # now we need to signal that the bucket was updated 
-    # like it would have if we called save instead of using 
-    # a bulk load...
-    feed._send_modified(context)
+    # 200 status code, not from cache, do update...
+    feed.update_from_feed(content, method=METHOD_PUSH)
+    feed.save()
 
     log.info("Updated feed %s success: %s, %d new items" % 
       (feed.url, feed.update_history[0].success, feed.update_history[0].updates))
@@ -86,9 +81,9 @@ def index_feed_polling(url, context, timeout=15, request_info=None):
     if request_info is None:
         request_info = {}
 
-    feed = RemoteFeed.lookup_by_url(context.db, url)
+    feed = RemoteFeed.get_by_url(url, context)
     if feed is None:
-        feed = RemoteFeed.create_from_url(url)
+        feed = RemoteFeed.create_from_url(url, context)
 
     if check_request_approved(feed, request_info, context) == False:
         log.warn("Rejected index request for %s" % url)
@@ -110,21 +105,14 @@ def index_feed_polling(url, context, timeout=15, request_info=None):
                            reason=response.reason, method=METHOD_POLL)
     else:
         # 200 status code, not from cache, do update...
-        updated_docs += feed.update_from_feed(content, context.db, method=METHOD_POLL)
+        feed.update_from_feed(content, method=METHOD_POLL)
 
     # compute the next time to check...
     next_interval = compute_next_fetch_interval(feed.update_history)
     log.debug("next update interval for %s = %s" % (feed.url, next_interval))
     feed.next_poll_time = datetime.utcnow() + next_interval
     feed.poll_in_progress = False
-
-    updated_docs.append(feed)
-    context.db.update(updated_docs)
-
-    # now we need to signal that the bucket was updated 
-    # like it would have if we called save instead of using 
-    # a bulk load...
-    feed._send_modified(context)
+    feed.save()
 
     log.info("Updated feed %s success: %s, %d new items" % 
       (feed.url, feed.update_history[0].success, feed.update_history[0].updates))
@@ -221,6 +209,9 @@ class FeedIndexer(FeedIndexerConsumer):
         index_feed_polling(url, self.context, request_info=message_data)
     
     def handle_push(self, url, message_data, message):
-        log.info('Received push index request for %s' % url)
-        content = message_data['content']
-        index_feed_push(url, content, self.context, request_info=message_data)
+        log.info('Recieved push index request for %s' % url)
+        try:
+            content = message_data['content']
+            index_feed_push(url, content, self.context, request_info=message_data)
+        except:
+            log.error("Error pushing %s: %s" % (message_data, traceback.format_exc()))

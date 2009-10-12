@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import logging
 
 from melkman.aggregator.api import notify_bucket_modified
-from melkman.db.bucket import NewsBucket, NewsItemRef, view_bucket_entries_by_timestamp
+from melkman.db.bucket import NewsBucket, NewsItemRef, view_entries_by_timestamp
 from melkman.db.util import DocumentHelper, DibjectField, MappingField
 
 
@@ -65,7 +65,7 @@ class Composite(NewsBucket):
         except KeyError:
             pass
 
-    def init_subscription(self, bucket_id, context):
+    def init_subscription(self, bucket_id):
         sub_info = self.subscriptions.get(bucket_id, None)
         
         if sub_info is None:
@@ -78,16 +78,16 @@ class Composite(NewsBucket):
             'limit': 50,
             'descending': True
         }
-        initial_items = [NewsItemRef.wrap(r.value) for r in 
-                         view_bucket_entries_by_timestamp(context.db, **query)]
+        initial_items = [NewsItemRef.from_doc(r.doc, self._context) for r in 
+                         view_entries_by_timestamp(self._context.db, **query)]
 
         if len(initial_items) > 0:
-            return self.filtered_update(initial_items, context)
+            return self.filtered_update(initial_items)
         else:
             return 0
 
-    def filtered_update(self, news_items, context):
-        return _filtered_update(self, news_items, context)
+    def filtered_update(self, news_items):
+        return _filtered_update(self, news_items, self._context)
 
     def get_rejected(self, db):
         if self._rejected is not None and self._rejected.id == self.rejected_ref:
@@ -98,25 +98,21 @@ class Composite(NewsBucket):
         else:
             return None
 
-    def save(self, context):
-        # XXX not transactional
-        NewsBucket.save(self, context)
+    def save(self):
+        NewsBucket.save(self)
         if self._rejected is not None:
-            self._rejected.save(self, context)
+            self._rejected.save(self)
 
-    def _send_modified(self, context):
-        notify_bucket_modified(self, context,
-                               updated_items=self._added.values(),
-                               removed_items=self._removed.values(),
-                               new_subscriptions=list(self._added_subs),
-                               removed_subscriptions=list(self._removed_subs))
-        self._added = {}
-        self._removed = {}
+    def _send_modified_event(self, **kw):
+        kwa = dict(kw)
+        kwa['new_subscriptions'] = list(self._added_subs)
+        kwa['removed_subscriptions'] = list(self._removed_subs)
         self._added_subs = set()
         self._removed_subs = set()
-    
+        NewsBucket._send_modified_event(self, **kwa)
 
     def _added_sub(self, bucket_id):
+        # XXX double events...
         try:
             self._removed_subs.remove(bucket_id)
         except KeyError:
@@ -125,6 +121,7 @@ class Composite(NewsBucket):
         self._added_subs.add(bucket_id)
 
     def _removed_sub(self, bucket_id):
+        # XXX double events
         try:
             self._added_subs.remove(bucket_id)
         except KeyError:
