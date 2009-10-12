@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 
 def callback_url_for(feed_url, context):
     base_url = context.config.pubsubhubbub_client.callback_url
-    melk_id = RemoteFeed.id_for_url(feed_url) # XXX unused?
     return '%s?url=%s' % (base_url, quote_plus(feed_url))
 
 def topic_url_for(feed):
@@ -53,15 +52,15 @@ def hubbub_sub(feed, context, hub_url=None):
     feed.save()
 
     cb = callback_url_for(feed.url, context)
-    req = {
-        'hub.callback': cb,
-        'hub.mode': 'subscribe',
-        'hub.topic': topic_url,
-        'hub.verify': 'sync',
-        'hub.verify': 'async', # XXX
-        'hub.verify_token': feed.hub_info.verify_token,
-        'hub.secret': feed.hub_info.secret
-    }
+    req = [
+        ('hub.callback', cb),
+        ('hub.mode', 'subscribe'),
+        ('hub.topic', topic_url),
+        ('hub.verify', 'sync'),
+        ('hub.verify', 'async'),
+        ('hub.verify_token', feed.hub_info.verify_token),
+        ('hub.secret', feed.hub_info.secret)
+    ]
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
@@ -78,14 +77,14 @@ def hubbub_unsub(feed, context):
         feed.save()
 
     cb = callback_url_for(feed.url, context)
-    req = {
-        'hub.callback': cb,
-        'hub.mode': 'unsubscribe',
-        'hub.topic': topic_url,
-        'hub.verify': 'sync',
-        'hub.verify': 'async', # XXX
-        'hub.verify_token': feed.hub_info.verify_token
-    }
+    req = [
+        ('hub.callback', cb),
+        ('hub.mode', 'unsubscribe'),
+        ('hub.topic', topic_url),
+        ('hub.verify', 'sync'),
+        ('hub.verify', 'async'),
+        ('hub.verify_token', feed.hub_info.verify_token)
+    ]
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
