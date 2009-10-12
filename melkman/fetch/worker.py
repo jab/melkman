@@ -215,4 +215,3 @@ class FeedIndexer(FeedIndexerConsumer):
             index_feed_push(url, content, self.context, request_info=message_data)
         except:
             log.error("Error pushing %s: %s" % (message_data, traceback.format_exc()))
-
