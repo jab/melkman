@@ -54,7 +54,7 @@ def request_feed_index(url, context, priority=0, skip_reschedule=False):
     if skip_reschedule:
         message['skip_reschedule'] = True
     publisher = FeedIndexerPublisher(context.broker)
-    publisher.send({'url': url}, priority=priority)
+    publisher.send(message, priority=priority)
     publisher.close()
 
 def schedule_feed_index(url, timestamp, context, message_id=None, skip_reschedule=False):
@@ -85,7 +85,7 @@ def push_feed_index(url, content, context, **kw):
 class FeedIndexerSetup(Component):
     implements(IRunDuringBootstrap)
     
-    def bootstrap(sself, context, purge=False):
+    def bootstrap(self, context, purge=False):
 
         log.info("Setting up feed indexing queues...")
         c = FeedIndexerConsumer(context.broker)
@@ -113,3 +113,4 @@ class IndexRequestFilter(ExtensionInterface):
         if this returns False, the request will 
         be rejected.
         """
+

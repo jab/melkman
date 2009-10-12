@@ -244,4 +244,3 @@ def test_immediate_add():
     # it should also show up in the bucket.
     for item in items:
         assert bucket.has_news_item(item)
-    

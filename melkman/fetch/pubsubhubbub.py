@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 def callback_url_for(feed_url, context):
     base_url = context.config.pubsubhubbub_client.callback_url
-    melk_id = RemoteFeed.id_for_url(feed_url)
+    melk_id = RemoteFeed.id_for_url(feed_url) # XXX unused?
     return '%s?url=%s' % (base_url, quote_plus(feed_url))
 
 def topic_url_for(feed):
@@ -58,7 +58,7 @@ def hubbub_sub(feed, context, hub_url=None):
         'hub.mode': 'subscribe',
         'hub.topic': topic_url,
         'hub.verify': 'sync',
-        'hub.verify': 'async',
+        'hub.verify': 'async', # XXX
         'hub.verify_token': feed.hub_info.verify_token,
         'hub.secret': feed.hub_info.secret
     }
@@ -83,7 +83,7 @@ def hubbub_unsub(feed, context):
         'hub.mode': 'unsubscribe',
         'hub.topic': topic_url,
         'hub.verify': 'sync',
-        'hub.verify': 'async',
+        'hub.verify': 'async', # XXX
         'hub.verify_token': feed.hub_info.verify_token
     }
     body = urlencode(req)

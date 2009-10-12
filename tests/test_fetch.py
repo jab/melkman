@@ -36,7 +36,7 @@ def test_index_request():
     
         # make an index request...
         request_feed_index(test_url, ctx)
-        sleep(.2)
+        sleep(.5)
     
         rf = RemoteFeed.get_by_url(test_url, ctx)
         assert rf is not None
@@ -109,10 +109,11 @@ def test_push_index():
     ids = melk_ids_in(content, url)
     
     push_feed_index(url, content, ctx)
-    sleep(.2)
+    sleep(.5)
     
     rf = RemoteFeed.get_by_url(url, ctx)
     for iid in ids:
         assert iid in rf.entries
 
     indexer.kill()    
+
