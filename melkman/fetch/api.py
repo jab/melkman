@@ -113,3 +113,4 @@ class IndexRequestFilter(ExtensionInterface):
         if this returns False, the request will 
         be rejected.
         """
+

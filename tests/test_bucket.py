@@ -190,3 +190,4 @@ def test_add_from_ref():
     bucket2.save()
     bucket2 = NewsBucket.get(bucket2.id, ctx)
     assert bucket.has_news_item('abc')
+

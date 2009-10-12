@@ -299,3 +299,4 @@ def test_content_filter():
     assert not filt(dummy_news_item({'details': {'content': [content_field]}}))
     assert not filt(dummy_news_item({'details': {'summary': '', 'summary_detail': content_field}}))
 
+

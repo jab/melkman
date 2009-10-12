@@ -318,3 +318,4 @@ class ScheduledMessageService(object):
 
         if unclaim_count > 0:
             log.warn('Cleanup unclaimed %d items' % unclaim_count)
+

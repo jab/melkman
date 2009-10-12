@@ -126,3 +126,4 @@ def test_composite_filtered_update():
 
     for item in not_ok_items:
         assert not cc.has_news_item(item)
+
