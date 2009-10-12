@@ -18,6 +18,15 @@ pubsubhubbub_client: {
     callback_url: "http://localhost:7449",
 }
 
+twitter: {
+    username: 'fake',
+    password: 'fake',
+    filter_url: 'http://localhost:7439',
+    follow_limit: 400,
+    track_limit: 200,
+}
+
+
 plugins:
 - pattern: melkman.*
   enabled: true

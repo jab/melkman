@@ -20,8 +20,25 @@ pubsubhubbub_client: {
     # callback_url = http://www.example.com/where_its_exposed/pshb    
 }
 
+twitter: {
+    # this must be set to a valid twitter account before
+    # this can be enabled.
+    username: '',
+    password: '',
+    filter_url: 'http://stream.twitter.com/1/statuses/filter.json',
+
+    # these values are based on your account's access level or "role" 
+    # which is set by twitter on a case by case basis. The 
+    # default role allows 400 follow users, 200 track keywords.
+    # See http://apiwiki.twitter.com/Streaming-API-Documentation
+    follow_limit: 400,
+    track_limit: 200,
+}
+
 plugins:
     - pattern: melkman.*
       enabled: true
     - pattern: melkman.fetch.pubsubhubbub.*
+      enabled: false
+    - pattern: melkman.fetch.twitter.*
       enabled: false
