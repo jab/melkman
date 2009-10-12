@@ -41,26 +41,25 @@ class SubscriptionUpdateConsumer(Consumer):
     queue = SUBSCRIPTION_UPDATE_QUEUE
     durable = True
     
-def notify_bucket_modified(bucket, context, updated_items=None, removed_items=None, **kw):
+def notify_bucket_modified(bucket, context, **kw):
     message = {
         'bucket_id': bucket.id,
         'bucket_types': bucket.document_types,
-        'updated_items': [x.unwrap() for x in updated_items] or [],
-        'removed_items': [x.unwrap() for x in removed_items] or []
     }
     message.update(kw)
 
     publisher = BucketModifiedPublisher(context.broker)
     publisher.send(message)
 
-def notify_subscription_update(composite, bucket, context, updated_items=None, removed_items=None, **kw):
+def notify_subscription_update(composite, bucket, context, **kw):
+    updated_items = kw.get('updated_items', [])
+    removed_items = kw.get('removed_items', [])
+
     message = {
         'command': 'update_subscription',
         'composite_id': composite.id,
         'bucket_id': bucket.id,
         'bucket_types': bucket.document_types,
-        'updated_items': [x.unwrap() for x in updated_items] or [],
-        'removed_items': [x.unwrap() for x in removed_items] or []
     }
     message.update(kw)
     
