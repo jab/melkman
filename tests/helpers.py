@@ -167,9 +167,7 @@ class FileServer(TestHTTPServer):
         req = Request(environ)
         res = Response()
 
-        filename = req.path_info
-        while filename.startswith('/'):
-            filename = filename[1:]
+        filename = req.path_info.lstrip('/')
         filename = os.path.abspath(os.path.join(self.www_dir, filename))
 
         if filename.startswith(self.www_dir) and os.path.isfile(filename):
@@ -191,3 +189,4 @@ def append_param(url, k, v):
         return '%s&%s=%s' % (url, quote_plus(k), quote_plus(v))
     else: 
         return '%s?%s=%s' % (url, quote_plus(k), quote_plus(v))
+

@@ -166,7 +166,7 @@ class Context(object):
 
 class IContextConfigurable(ExtensionInterface):
     """
-    implement this interface to recieve the current context
+    implement this interface to receive the current context
     at activation time.
     """
 
@@ -177,7 +177,7 @@ class IContextConfigurable(ExtensionInterface):
 
 class IRunDuringBootstrap(ExtensionInterface):
     """
-    implement this interface to recieve a notification 
+    implement this interface to receive a notification 
     when the context is being bootstrapped or upgraded.
     """
     
@@ -256,3 +256,4 @@ def _deep_setdefault(d, defaults):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
