@@ -146,3 +146,43 @@ def test_sub_loop_sane():
     assert backend.get(COMPOSITE_DISPATCH_QUEUE) is None
     
     ctx.close()
+
+
+def test_init_subscription():
+    from eventlet.api import sleep
+    from eventlet.proc import spawn, waitall
+    from melkman.aggregator.worker import CompositeUpdater, CompositeUpdateDispatcher
+    from melkman.db.bucket import NewsBucket
+    from melkman.db.composite import Composite
+    from melkman.green import consumer_loop
+
+    ctx = fresh_context()
+
+    dispatcher = spawn(consumer_loop, CompositeUpdateDispatcher, ctx)
+    updater = spawn(consumer_loop, CompositeUpdater, ctx)
+
+    c = Composite.create(ctx)
+    c.save()
+
+    entries = []
+    bucket = NewsBucket.create(ctx)
+    for i in range(5):
+        eid = random_id()
+        entries.append(eid)
+        bucket.add_news_item(eid)
+    bucket.save()
+    sleep(.5)
+
+    c.subscribe(bucket)
+    c.save()
+    sleep(.5)
+
+    c = Composite.get(c.id, ctx)
+    for eid in entries:
+        assert c.has_news_item(eid)
+
+    dispatcher.kill()
+    updater.kill()
+    waitall([dispatcher, updater])
+
+    ctx.close()

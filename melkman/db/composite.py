@@ -76,7 +76,8 @@ class Composite(NewsBucket):
             'startkey': [bucket_id, {}],
             'endkey': [bucket_id, DateTimeField()._to_json(stop_date)],
             'limit': 50,
-            'descending': True
+            'descending': True,
+            'include_docs': True,
         }
         initial_items = [NewsItemRef.from_doc(r.doc, self._context) for r in 
                          view_entries_by_timestamp(self._context.db, **query)]
