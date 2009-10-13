@@ -58,7 +58,8 @@ class NewsItem(DocumentHelper):
         return self
 
 _REPLICATE_FIELDS = ('item_id', 'timestamp', 'title', 'author', 'link', 
-                     'source_title', 'source_url', 'summary')
+                     'source_title', 'source_url', 'summary', 
+                     'document_types')
 
 class NewsItemRef(DocumentHelper):
     """
@@ -336,7 +337,9 @@ class NewsBucket(DocumentHelper):
             pass
 
     def delete(self):
-        dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
+        del self._context.db[self.id]
+        # delete items
+        dels = []
         self._entries = None
         self._lazy_load_entries()
         for e in self._entries.values():
@@ -355,6 +358,7 @@ def immediate_add(bucket, item, context, notify=True):
     note, this will clobber any unsaved changes in the 
     bucket for this item.
     """
+
     if isinstance(item, basestring):
         item = NewsItemRef.create_from_info(context, bucket.id, item_id=item)
     elif isinstance(item, NewsItem) or isinstance(item, NewsItemRef):
@@ -369,18 +373,21 @@ def immediate_add(bucket, item, context, notify=True):
         return False
     else:
         current_item.update_from(item)
-    
+
     try:
+        if not bucket.id in context.db:
+            # not perfect since it's not transactional
+            # but don't add to clearly non-existent buckets.
+            raise ResourceNotFound
         current_item.save()
-        bucket._clobber(current_item)        
-        
+        bucket._clobber(current_item)
+
         if notify == True:
             notify_bucket_modified(bucket, context, updated_items=[current_item.unwrap()])
 
         return True
     except ResourceConflict:
         return False
-    
 
 #####################################################################
 # this is a view that indexes the entries in a bucket by timestamp
@@ -409,6 +416,15 @@ view_entries_by_add_time = ViewDefinition('bucket_indices', 'entries_by_add_time
 function(doc) {
     if (doc.document_types && doc.document_types.indexOf("NewsItemRef") != -1) {
         emit([doc.bucket_id, doc.add_time], doc.item_id);
+    }
+}
+''')
+
+view_refs_to_item = ('bucket_indices', 'refs_to_item', 
+'''
+function(doc) {
+    if (doc.document_types && doc.document_types.indexOf("NewsItemRef") != -1) {
+        emit(doc.item_id, null);
     }
 }
 ''')

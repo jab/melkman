@@ -5,37 +5,76 @@ from giblets import Component, implements
 import logging
 from melk.util.hash import melk_id
 import re
+import traceback
 from tweetstream import TweetStream
 import urllib
 
 from melkman.context import IRunDuringBootstrap
-from melkman.db import NewsBucket, NewsItemRef
+from melkman.db import NewsBucket, NewsItemRef, immediate_add
+from melkmna.db.util import ReadOnlyTextField
+
+__all__ = ['Tweet', 'TweetRef', 'TweetBucket', 
+           'TweetPublisher', 'TweetConsumer', 
+           'TwitterConnection']
 
 log = logging.getLogger(__name__)
 
-class Tweet(NewsItemRef):
-    document_types = ListField(TextField(), default=['NewsItemRef', 'Tweet'])
-    
-    @property
-    def details(self):
-        return {}
+def tweet_trace(tweet):
+    tt = {}
+    tt['item_id'] = tweet.get('id')
+    tt['title'] = '' # ???
+    tt['author'] = '@%s' % tweet.get('user', {}).get('screen_name')
+    tt['summary'] = tweet.get('text', '')
+    tt['timestamp'] = tweet.get('created_at')
+    tt['source_title'] = 'Twitter'
+    # tt['source_url'] = ???
+    return tt
+
+class Tweet(NewsItem):
+    document_types = ListField(TextField(), default=['NewsItem', 'Tweet'])
+
+    @classmethod
+    def create_from_tweet(cls, tweet, context):
+        tt = tweet_trace(tweet)
+        tt['details'] = tweet
+        tid = cls.dbid(tt.item_id)
+        return cls.create(context, tid, **tt)
+
+    @classmethod
+    def dbid(cls, tweet_id):
+        return 'tweet:%s' % tweet_id
+
+class TweetRef(NewsItemRef):
+    document_types = ListField(TextField(), default=['NewsItemRef', 'TweetRef'])
 
     def load_full_item(self):
-        return self
+        return Tweet.get(self.item_id, self._context)
 
 class TweetBucket(NewsBucket):
 
     document_types = ListField(TextField(), default=['NewsBucket', 'TweetBucket'])
 
+    # these should not be changed, they are the characteristic
+    # of this bucket -- only set during initialization
     filter_type = TextField()
     filter_value = TextField()
+
+    def save(self):
+        is_new = self.rev is None
+        NewsBucket.save(self)
+        if is_new:
+            twitter_filters_changed(self._context)
+
+    def delete(self):
+        NewsBucket.delete(self)
+        twitter_filters_changed(self._context)
 
     @classmethod
     def create_from_constraint(cls, filter_type, value, ctx):
         bid = cls.dbid(filter_type, value)
         instance = cls.create(ctx, bid)
-        instance.filter_type = filter_type
-        instance.filter_value = value
+        instance.filter_type.noreally(filter_type)
+        instance.filter_value.noreally(value)
         return instance
 
     @classmethod
@@ -71,6 +110,8 @@ function(doc) {
     }
 }
 ''')
+
+#############################
 
 class MelkmanTweetStream(TweetStream):
     
@@ -115,6 +156,28 @@ class TweetConsumer(Consumer):
     routing_key = GOT_TWEET_KEY
     durable = True
 
+# Transient notifications of filters changing
+# state for anyone working on sorting and filtering
+# tweets.
+TWITTER_FILTERS_FAN = 'twitter_filters.fanout'
+class TwitterFilterStatePublisher(Publisher):
+    exchange = TWITTER_FILTERS_FAN
+    exchange_type = 'fanout'
+    delivery_mode = 1
+    mandatory = False
+    durable = False
+
+class TwitterFilterStateConsumer(Consumer):
+    exchange = TWITTER_FILTERS_FAN
+    exchange_type = 'fanout'
+    exclusive = True
+    no_ack = True
+    
+def twitter_filters_changed(context):
+    pub = TwitterFilterStatePublisher(context)
+    pub.send({})
+    pub.close()
+
 class TwitterSetup(Component):
     implements(IRunDuringBootstrap)
 
@@ -137,12 +200,13 @@ def recieved_tweet(self, tweet_data, context):
     publisher.close()
 
 class BasicSorter(object):
-    def __init__(self, bucket_id):
-        self.bucket_id = bucket_id
+    def __init__(self, bucket_id, context):
+        self.context = context
+        self.bucket = NewsBucket.get(bucket_id, ctx)
     
-    def apply(self, tweet):
-        if self.matches(tweet):
-            pass
+    def apply(self, tweet_data, item):
+        if self.matches(tweet_data):
+            immediate_add(self.bucket, item, self.context)
 
 PUNC = re.compile('[^a-zA-Z0-9]+')
 def no_punc(x):
@@ -277,35 +341,69 @@ class TweetSorter(object):
             return None
 
     def refresh(self):
-        self._sorters = []
+        new_sorters = []
         for r in view_all_twitter_filters(self.context.db):
             filt_type, value = r.key()
             sorter = self._create_sorter(filt_type, value, r.id)
-            if sort is not None:
-                self._sorters.append(sorter)
+            if sorter is not None:
+                new_sorters.append(sorter)
+        self._sorters = new_sorters
 
-    def sort(self, tweet):
+    def sort(self, tweet_data, item):
         for sorter in self._sorters:
-            sorter.apply(tweet)
-        
+            try:
+                sorter.apply(tweet_data, item)
+            except:
+                log.error("Error sorting tweet: %s: %s" % (tweet_data, traceback.format_exc()))
+
 class TweetSorterConsumer(TweetConsumer):
     
     queue = TWEET_SORTER_QUEUE
 
-    def __init__(self, context):
+    def __init__(self, context, sorter):
         TweetConsumer.__init__(self, context.broker)
         self.context = context
+        self.sorter = sorter
 
     def receive(self, message_data, message):
         spawn(self.handle_message, message_data, message)
 
     def handle_message(self, message_data, message):
-        author_id = message_data.user.id
+        try:
+            item = Tweet.create_from_tweet(message_data)
+            item.save()
+            self.sorter.sort(message_data, item)
+        finally:
+            message.ack()
+
+#################################################
+
+class TwitterConnection(object):
+    
+    def __init__(self, context):
+        self.context = context
+        self._
+    
+    def run(self):
+        pass
         
-        follow_bucket = TweetBucket.get_by_follow(author_id)
-        if follow_bucket is not None:
-            follow_bucket.add_news_item(item)
-            
+    def run_change_listener(self):
+        pass
+
+    def run_tweet_listener(self):
+        try:
+            stream = MelkmanTweetStream(self.context)
+            while True:
+                recieved_tweet(stream.next(), self.context)
+        except ConnectionError, e:
+            log.error('Error in twitter connection: %s' % traceback.format_exc())
+
+#
+# trigger re-connect when changed 
+# back-searching / following by sub-api?
+# as feeds... (?)
+#
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
