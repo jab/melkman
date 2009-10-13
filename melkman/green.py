@@ -85,6 +85,7 @@ def resilient_consumer_loop(make_consumer, context):
     seq_reconnects = 0
     total_reconnects = 0
     dead = False
+    consumer = None
     while True:
         try:
             consumer = make_consumer(context)
@@ -100,7 +101,8 @@ def resilient_consumer_loop(make_consumer, context):
             log.error("Error consuming message: %s" % traceback.format_exc())
         finally:
             if not dead:
-                consumer.close()
+                if consumer is not None:
+                    consumer.close()
                 context.close()
                 total_reconnects += 1
                 seq_reconnects += 1
