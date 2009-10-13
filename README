@@ -89,7 +89,7 @@ Melkman Interactive Shell
 ...
 You may access the current context as "ctx"
 
->>> url = "'http://rss.slashdot.org/Slashdot/slashdot"
+>>> url = "http://rss.slashdot.org/Slashdot/slashdot"
 
 >>> from melkman.fetch import request_feed_index
 >>> request_feed_index(url, ctx)
