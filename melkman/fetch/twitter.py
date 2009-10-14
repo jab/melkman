@@ -1,6 +1,7 @@
 from carrot.messaging import Publisher, Consumer
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
+from datetime import datetime
 from giblets import Component, implements
 import logging
 from melk.util.hash import melk_id
@@ -10,12 +11,12 @@ from tweetstream import TweetStream
 import urllib
 
 from melkman.context import IRunDuringBootstrap
-from melkman.db import NewsBucket, NewsItemRef, immediate_add
-from melkmna.db.util import ReadOnlyTextField
+from melkman.db.bucket import NewsBucket, NewsItemRef, immediate_add
+from melkman.green import RWLock
 
 __all__ = ['Tweet', 'TweetRef', 'TweetBucket', 
            'TweetPublisher', 'TweetConsumer', 
-           'TwitterConnection']
+           'TwitterStreamConnection']
 
 log = logging.getLogger(__name__)
 
@@ -156,27 +157,10 @@ class TweetConsumer(Consumer):
     routing_key = GOT_TWEET_KEY
     durable = True
 
-# Transient notifications of filters changing
-# state for anyone working on sorting and filtering
-# tweets.
-TWITTER_FILTERS_FAN = 'twitter_filters.fanout'
-class TwitterFilterStatePublisher(Publisher):
-    exchange = TWITTER_FILTERS_FAN
-    exchange_type = 'fanout'
-    delivery_mode = 1
-    mandatory = False
-    durable = False
-
-class TwitterFilterStateConsumer(Consumer):
-    exchange = TWITTER_FILTERS_FAN
-    exchange_type = 'fanout'
-    exclusive = True
-    no_ack = True
-    
+TWITTER_CHANNEL = 'twitter'
+FILTERS_CHANGED = 'filters_changed'
 def twitter_filters_changed(context):
-    pub = TwitterFilterStatePublisher(context)
-    pub.send({})
-    pub.close()
+    context.event_bus.send(TWITTER_CHANNEL, {'type': FILTER_CHANGED})
 
 class TwitterSetup(Component):
     implements(IRunDuringBootstrap)
@@ -329,7 +313,9 @@ class TweetSorter(object):
         self.context = context
         self.refresh()
         self._sorters = []
+        self._rwlock = RWLock()
         self.refresh()
+        
         
     def create_sorter(self, filt_type, value, id):
         # ? Extensible...
@@ -341,29 +327,38 @@ class TweetSorter(object):
             return None
 
     def refresh(self):
-        new_sorters = []
-        for r in view_all_twitter_filters(self.context.db):
-            filt_type, value = r.key()
-            sorter = self._create_sorter(filt_type, value, r.id)
-            if sorter is not None:
-                new_sorters.append(sorter)
-        self._sorters = new_sorters
+        self._rwlock.write_acquire()
+        try:
+            new_sorters = []
+            for r in view_all_twitter_filters(self.context.db):
+                filt_type, value = r.key()
+                sorter = self._create_sorter(filt_type, value, r.id)
+                if sorter is not None:
+                    new_sorters.append(sorter)
+            self._sorters = new_sorters
+        finally:
+            self._rwlock.write_release()
 
     def sort(self, tweet_data, item):
-        for sorter in self._sorters:
-            try:
-                sorter.apply(tweet_data, item)
-            except:
-                log.error("Error sorting tweet: %s: %s" % (tweet_data, traceback.format_exc()))
+        self._rwlock.read_acquire()
+        try:
+            for sorter in self._sorters:
+                try:
+                    sorter.apply(tweet_data, item)
+                except:
+                    log.error("Error sorting tweet: %s: %s" % (tweet_data, traceback.format_exc()))
+        finally:
+            self._rwlock.read_release()
 
 class TweetSorterConsumer(TweetConsumer):
-    
+
     queue = TWEET_SORTER_QUEUE
 
-    def __init__(self, context, sorter):
+    def __init__(self, context):
         TweetConsumer.__init__(self, context.broker)
         self.context = context
-        self.sorter = sorter
+        self.sorter = TweetSorter(context)
+        self.context.event_bus.add_listener(TWITTER_CHANNEL, self.twitter_event)
 
     def receive(self, message_data, message):
         spawn(self.handle_message, message_data, message)
@@ -376,30 +371,85 @@ class TweetSorterConsumer(TweetConsumer):
         finally:
             message.ack()
 
-#################################################
+    def twitter_event(self, message):
+        if message.get('type') == FILTERS_CHANGED:
+            self.sorter.refresh()
 
-class TwitterConnection(object):
-    
+    def close(self):
+        TweetConsumer.close(self)
+        # un-register callback from eventbus
+        context.event_bus.remove_listener(TWITTER_CHANNEL, self.twitter_event)
+
+#################################################
+class TwitterStreamConnection(object):
+
     def __init__(self, context):
         self.context = context
-        self._
-    
-    def run(self):
-        pass
-        
-    def run_change_listener(self):
-        pass
+        self._reader = None
 
-    def run_tweet_listener(self):
+    def run():
         try:
-            stream = MelkmanTweetStream(self.context)
-            while True:
-                recieved_tweet(stream.next(), self.context)
-        except ConnectionError, e:
-            log.error('Error in twitter connection: %s' % traceback.format_exc())
+            self.context.event_bus.add_listener(TWITTER_CHANNEL, self.twitter_event)
+            while(True):
+                self._reader = spawn(self.read_stream)
+                self._reader.wait()
+        except ProcExit:
+            if self._reader is not None:
+                self._reader.kill()
+                self._reader.wait()
+            self.context.event_bus.remove_listener(TWITTER_CHANNEL, self.twitter_event)
+            return
 
-#
-# trigger re-connect when changed 
+    def twitter_event(self, message):
+        if message.get('type') == FILTERS_CHANGED:
+            if self._reader is not None:
+                self._reader.kill()
+
+    def read_stream(self):
+        tcp_failures = 0
+        other_failures = 0
+        successes = 0
+        stream = None
+        while(True):
+            try:
+                stream = MelkmanTweetStream(self.context)
+                while True:
+                    recieved_tweet(stream.next(), self.context)
+                    if tcp_failures > 0 or other_failures > 0:
+                        successes += 1
+                        if successes > 100:
+                            tcp_failures = 0
+                            other_failures = 0
+            except ProcExit:
+                if stream is not None:
+                    stream.close()
+                return
+            except ConnectionError, e:
+                if stream is not None:
+                    stream.close()
+
+                # backoff as suggested in
+                # http://apiwiki.twitter.com/Streaming-API-Documentation#Connecting
+                log.error('Error in twitter connection: %s' % traceback.format_exc())
+                tcp_failures += 1
+                successes = 0
+                if tcp_failures < 64:
+                    sleep(250 * tcp_failures)
+                else:
+                    sleep(16000)
+            except:
+                if stream is not None:
+                    stream.close()
+                # backoff as suggested in
+                # http://apiwiki.twitter.com/Streaming-API-Documentation#Connecting
+                log.error('Error handling twitter stream: %s' % traceback.format_exc())
+                other_failures += 1
+                successes = 0
+                if other_failures < 15:
+                    sleep(max(10*(2**other_failures)))
+                else:
+                    sleep(240000)
+#           
 # back-searching / following by sub-api?
 # as feeds... (?)
 #
