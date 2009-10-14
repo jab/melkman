@@ -1,5 +1,6 @@
+from __future__ import with_statement
 from carrot.messaging import Publisher, Consumer
-from eventlet.coros import event
+from eventlet.coros import event, Semaphore
 from eventlet.proc import spawn, waitall
 from uuid import uuid1
 from melkman.green import resilient_consumer_loop
@@ -22,10 +23,23 @@ class EventConsumer(Consumer):
     no_ack = True
 
     def __init__(self, channel, context):
+        self._callback_lock = Semaphore(1)
         queue = 'eb_%s' % uuid1().hex
         Consumer.__init__(self, context.broker,
                           exchange=exchange_for_channel(channel),
                           queue=queue)
+
+    def register_callback(self, callback):
+        with self._callback_lock:
+            Consumer.register_callback(self, callback)
+
+    def remove_callback(self, callback):
+        with self._callback_lock:
+            self.callbacks.remove(callback)
+
+    def recieve(self, message_data, message):
+        with self._callback_lock:
+            Consumer.recieve(message_data, message)
 
 class EventBus(object):
     """
@@ -50,6 +64,11 @@ class EventBus(object):
         def cb(message_data, message):
             callback(message_data)
         consumer.register_callback(cb)
+
+    def remove_listener(self, channel, callback):
+        consumer = self._consumers.get(channel)
+        if consumer is not None:
+            consumer.remove_callback(callback)
 
     def _start_consumer(self, channel):
         ready = event()
