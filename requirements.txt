@@ -1,0 +1,8 @@
+-e git+git://github.com/ltucker/melkman.git#egg=melkman
+-e git+git://github.com/ltucker/melk.util.git#egg=melk.util
+-e git+git://github.com/ltucker/giblets.git#egg=giblets
+-e git+git://github.com/ltucker/feedparser.git#egg=feedparser
+-e git+git://github.com/ltucker/greenamqp.git#egg=greenamqp
+# doesn't work from cheesshop anymore :(
+http://httplib2.googlecode.com/files/httplib2-0.4.0.tar.gz#egg=httplib2
+nose
