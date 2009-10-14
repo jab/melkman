@@ -3,6 +3,9 @@
 -e git+git://github.com/ltucker/giblets.git#egg=giblets
 -e git+git://github.com/ltucker/feedparser.git#egg=feedparser
 -e git+git://github.com/ltucker/greenamqp.git#egg=greenamqp
-# doesn't work from cheesshop anymore :(
+
+# pypi has a broken link for httplib2 so we have to supply a working one here
+# (see http://code.google.com/p/httplib2/issues/detail?id=74)
 http://httplib2.googlecode.com/files/httplib2-0.4.0.tar.gz#egg=httplib2
+
 nose
