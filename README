@@ -9,6 +9,24 @@ Python
 CouchDB  - http://couchdb.apache.org/
 RabbitMQ - http://www.rabbitmq.com/
 
+==================
+Install
+==================
+
+It is recommended that you install melkman into a virtualenv. so if you 
+have not already, first install virtualenv and pip:
+$ easy_install virtualenv
+...
+$ easy_install pip
+...
+
+Great, now install melkman dependancies into a new env:
+
+$ virtualenv melkman
+$ pip -E./melkman install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
+...
+<take nap>
+...
 
 ==================
 QuickStart
