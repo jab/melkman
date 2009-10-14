@@ -14,6 +14,7 @@ from giblets.search import find_plugins_by_entry_point
 from melk.util.dibject import Dibject, dibjectify, json_wake
 from melk.util.typecheck import is_dicty, asbool
 
+
 log = logging.getLogger(__name__)
 
 DEFAULTS = {
@@ -38,8 +39,10 @@ class Context(object):
     holds common configuration related data and methods.
     """
     def __init__(self, config):
+        from melkman.eventbus import EventBus
         self.config = dibjectify(config)
         self._local = threading.local()
+        self._events = EventBus(self)
         find_plugins_by_entry_point(MELKMAN_PLUGIN_ENTRY_POINT)
 
     def close(self):
@@ -89,6 +92,13 @@ class Context(object):
     def create_db_server(self):
         server_address = self.db_server_address
         return CouchDBServer(server_address)
+
+    #######################
+    # Broadcast event bus
+    #######################
+    @property
+    def event_bus(self):
+        return self._events
 
     ######################
     # AMQP 
