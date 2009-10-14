@@ -1,6 +1,6 @@
 from helpers import *
 
-def test_event_send_recieve():
+def test_event_send_receive():
     from eventlet.api import sleep
     from melkman.eventbus import EventBus
     ctx = fresh_context()
