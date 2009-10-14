@@ -19,6 +19,8 @@ def test_event_send_recieve():
     
     assert got_events['count'] == 1
     
+    event_bus.kill()
+    
 
 def test_multiple_listeners():
     from eventlet.api import sleep
@@ -45,6 +47,8 @@ def test_multiple_listeners():
 
     assert got_events['one'] == 1
     assert got_events['two'] == 1
+
+    event_bus.kill()
 
 
 def test_multiple_consumers():
@@ -83,6 +87,8 @@ def test_multiple_consumers():
     assert got_events['one'] == 2
     assert got_events['two'] == 2
 
+    event_bus1.kill()
+    event_bus2.kill()
 
 def test_multiple_channels():
     from eventlet.api import sleep
@@ -117,4 +123,4 @@ def test_multiple_channels():
     assert got_events['one'] == 1
     assert got_events['two'] == 1
 
-    
+    event_bus.kill()

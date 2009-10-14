@@ -1,6 +1,6 @@
 from carrot.messaging import Publisher, Consumer
 from eventlet.coros import event
-from eventlet.proc import spawn
+from eventlet.proc import spawn, waitall
 from uuid import uuid1
 from melkman.green import resilient_consumer_loop
 
@@ -66,4 +66,4 @@ class EventBus(object):
     def kill(self):
         for p in self._procs.values():
             p.kill()
-            p.wait()
+        waitall(self._procs.values())
