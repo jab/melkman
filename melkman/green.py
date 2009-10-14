@@ -61,9 +61,7 @@ class GreenContext(Context):
         log = logging.getLogger(__name__)
 
 def consumer_loop(make_consumer, context):
-    dead = False
     consumer = None
-
     try:
         consumer = make_consumer(context)
         it = consumer.iterconsume()
@@ -71,20 +69,14 @@ def consumer_loop(make_consumer, context):
             pass
     except ProcExit:
         log.debug("consumer_loop: killed")
-        dead = True
+    finally:
         if consumer:
             consumer.close()
         context.close()
-    finally:
-        if not dead:
-            if consumer:
-                consumer.close()
-            context.close()
 
 def resilient_consumer_loop(make_consumer, context):
     seq_reconnects = 0
     total_reconnects = 0
-    dead = False
     consumer = None
     while True:
         try:
@@ -97,22 +89,22 @@ def resilient_consumer_loop(make_consumer, context):
             dead = True
             consumer.close()
             context.close()
+            return
         except:
             log.error("Error consuming message: %s" % traceback.format_exc())
         finally:
-            if not dead:
-                if consumer is not None:
-                    consumer.close()
-                context.close()
-                total_reconnects += 1
-                seq_reconnects += 1
-                if seq_reconnects < 10:
-                    sleep_time = 2**seq_reconnects
-                else:
-                    sleep_time = 60*10
+            if consumer is not None:
+                consumer.close()
+            context.close()
+            total_reconnects += 1
+            seq_reconnects += 1
+            if seq_reconnects < 10:
+                sleep_time = 2**seq_reconnects
+            else:
+                sleep_time = 60*10
 
-                log.error("Reconnect #%d (%dth in a row), sleeping for %d seconds..." % (total_reconnects, seq_reconnects, sleep_time))
-                sleep(sleep_time)
+            log.error("Reconnect #%d (%dth in a row), sleeping for %d seconds..." % (total_reconnects, seq_reconnects, sleep_time))
+            sleep(sleep_time)
 
 def timeout_wait(event, timeout_secs):
     """
