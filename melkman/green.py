@@ -3,7 +3,7 @@ from carrot.backends.pyamqplib import Backend as AMQBackend
 from carrot.connection import BrokerConnection
 from eventlet.api import sleep, timeout, TimeoutError, getcurrent
 from eventlet.corolocal import get_ident, local as green_local
-from eventlet.coros import event
+from eventlet.coros import event, semaphore, metaphore
 from eventlet.proc import ProcExit
 from greenamqp.client_0_8 import Connection as GreenConnection
 import logging
@@ -119,3 +119,37 @@ def timeout_wait(event, timeout_secs):
     except TimeoutError:
         pass
 
+class LockViolation(Exception):
+    pass
+
+class RWLock(object):
+    """
+    This is a single writer multiple reader 
+    greenlet lock with write preference.
+    """
+    def __init__(self):
+        self.write_lock = semaphore(count=1)
+        self.readers = metaphore()
+        self.writers = metaphore()
+
+    def write_acquire(self):
+        self.writers.inc()
+        self.write_lock.acquire()
+        self.readers.wait()
+
+    def read_acquire(self):
+        self.writers.wait()
+        self.write_lock.acquire()
+        self.readers.inc()
+        self.write_lock.release()
+
+    def write_release(self):
+        if not self.write_lock.locked():
+            raise LockViolation('Write lock not acquired.')
+        self.writers.dec()
+        self.write_lock.release()
+
+    def read_release(self):
+        if self.readers.counter == 0:
+            raise LockViolation('Reader count is already 0.') 
+        self.readers.dec()
