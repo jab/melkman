@@ -131,6 +131,12 @@ class NewsBucket(DocumentHelper):
         self._removed = {}
         self._updated = {}
 
+    @classmethod
+    def create(cls, context, *args, **kw):
+        if len(args) == 0 and not 'id' in kw:
+            log.warn("assigning random id to bucket...")
+            args = [melk_id(nonce_str())]
+        return super(NewsBucket, cls).create(context, *args, **kw)
 
     @property
     def entries(self):
