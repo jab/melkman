@@ -65,8 +65,46 @@ def test_filter_collection():
     assert 'tacos' not in tracks
 
 def test_tweet_sorting():
-    pass
+    from eventlet.api import sleep
+    from eventlet.proc import spawn
+    from melkman.fetch.twitter import TweetBucket, received_tweet
+    from melkman.fetch.twitter import TweetSorterConsumer, tweet_trace
+    from melkman.green import consumer_loop
+
+    ctx = fresh_context()
+    sorter = spawn(consumer_loop, TweetSorterConsumer, ctx)
+
+    foo_bucket = TweetBucket.create_from_follow('12', ctx)
+    foo_bucket.save()
     
+    bar_bucket = TweetBucket.create_from_topic('bar', ctx)
+    bar_bucket.save()
+
+    tweets = [{'id': 1747474, 'user': {'id': 12}, 'text': 'bbzt blatt'},
+              {'id': 1747475, 'user': {'id': 11}, 'text': 'bbzt #bar blatt'},
+              {'id': 1747476, 'user': {'id': 12}, 'text': 'bbzt @bar blatt'}]
+
+    for i in range(len(tweets)):
+        received_tweet(tweets[i], ctx)
+
+    sleep(.5)
+
+    tts = [tweet_trace(t) for t in tweets]
+    tids = [tt['item_id'] for tt in tts]
+    
+    foo_bucket = TweetBucket.get_by_follow('12', ctx)
+    bar_bucket = TweetBucket.get_by_topic('bar', ctx)
+
+    assert tids[0] in foo_bucket.entries
+    assert tids[1] not in foo_bucket.entries
+    assert tids[2] in foo_bucket.entries
+
+    assert tids[0] not in bar_bucket.entries
+    assert tids[1] in bar_bucket.entries
+    assert tids[2] in bar_bucket.entries
+    
+    sorter.kill()
+
 def test_tweet_sorting_reset():
     pass
     

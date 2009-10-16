@@ -58,8 +58,7 @@ class NewsItem(DocumentHelper):
         return self
 
 _REPLICATE_FIELDS = ('item_id', 'timestamp', 'title', 'author', 'link', 
-                     'source_title', 'source_url', 'summary', 
-                     'document_types')
+                     'source_title', 'source_url', 'summary')
 
 class NewsItemRef(DocumentHelper):
     """
@@ -104,7 +103,9 @@ class NewsItemRef(DocumentHelper):
         instance = cls.create(context, **kw)
         
         for field in _REPLICATE_FIELDS:
-            instance[field] = item[field]
+            setattr(instance, field, getattr(item, field))
+
+        # XXX doc type / ref type ???
 
         return instance
 
@@ -124,7 +125,6 @@ class NewsBucket(DocumentHelper):
 
     def __init__(self, *args, **kw):
         if len(args) == 0 and not 'id' in kw:
-            log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         
         DocumentHelper.__init__(self, *args, **kw)

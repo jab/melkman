@@ -2,6 +2,7 @@ from carrot.messaging import Publisher, Consumer
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
+from eventlet.proc import spawn
 from giblets import Component, implements
 import logging
 from melk.util.hash import melk_id
@@ -11,18 +12,19 @@ from tweetstream import TweetStream
 import urllib
 
 from melkman.context import IRunDuringBootstrap
-from melkman.db.bucket import NewsBucket, NewsItemRef, immediate_add
+from melkman.db.bucket import NewsBucket, NewsItem, NewsItemRef, immediate_add
 from melkman.green import RWLock
 
 __all__ = ['Tweet', 'TweetRef', 'TweetBucket', 
            'TweetPublisher', 'TweetConsumer', 
-           'TwitterStreamConnection']
+           'TwitterStreamConnection', 
+           'tweet_trace']
 
 log = logging.getLogger(__name__)
 
 def tweet_trace(tweet):
     tt = {}
-    tt['item_id'] = tweet.get('id')
+    tt['item_id'] = 'tweet:%s' % tweet.get('id')
     tt['title'] = '' # ???
     tt['author'] = '@%s' % tweet.get('user', {}).get('screen_name')
     tt['summary'] = tweet.get('text', '')
@@ -38,11 +40,10 @@ class Tweet(NewsItem):
     def create_from_tweet(cls, tweet, context):
         tt = tweet_trace(tweet)
         tt['details'] = tweet
-        tid = cls.dbid(tt.item_id)
+        tid = tt['item_id']
+        del tt['item_id']
         return cls.create(context, tid, **tt)
 
-    @classmethod
-    def dbid(cls, tweet_id):
         return 'tweet:%s' % tweet_id
 
 class TweetRef(NewsItemRef):
@@ -74,8 +75,8 @@ class TweetBucket(NewsBucket):
     def create_from_constraint(cls, filter_type, value, ctx):
         bid = cls.dbid(filter_type, value)
         instance = cls.create(ctx, bid)
-        instance.filter_type.noreally(filter_type)
-        instance.filter_value.noreally(value)
+        instance.filter_type = filter_type
+        instance.filter_value = value
         return instance
 
     @classmethod
@@ -88,7 +89,7 @@ class TweetBucket(NewsBucket):
 
     @classmethod
     def get_by_constraint(cls, filter_type, value, ctx):
-        bid = dbid(filter_type, value)
+        bid = cls.dbid(filter_type, value)
         return cls.get(bid, ctx)
         
     @classmethod
@@ -143,7 +144,7 @@ class MelkmanTweetStream(TweetStream):
         return urllib.urlencode(post_data)
 
 TWEET_EXCHANGE = 'melkman.direct'
-GOT_TWEET_KEY = 'tweet_recieved'
+GOT_TWEET_KEY = 'tweet_received'
 TWEET_SORTER_QUEUE = 'tweet_sorter'
 
 class TweetPublisher(Publisher):
@@ -160,7 +161,7 @@ class TweetConsumer(Consumer):
 TWITTER_CHANNEL = 'twitter'
 FILTERS_CHANGED = 'filters_changed'
 def twitter_filters_changed(context):
-    context.event_bus.send(TWITTER_CHANNEL, {'type': FILTER_CHANGED})
+    context.event_bus.send(TWITTER_CHANNEL, {'type': FILTERS_CHANGED})
 
 class TwitterSetup(Component):
     implements(IRunDuringBootstrap)
@@ -178,19 +179,24 @@ class TwitterSetup(Component):
 
         context.broker.close()
 
-def recieved_tweet(self, tweet_data, context):
-    publisher = TweetPublisher(self.context.broker)
+def received_tweet(tweet_data, context):
+    publisher = TweetPublisher(context.broker)
     publisher.send(tweet_data)
     publisher.close()
 
 class BasicSorter(object):
-    def __init__(self, bucket_id, context):
-        self.context = context
-        self.bucket = NewsBucket.get(bucket_id, ctx)
-    
-    def apply(self, tweet_data, item):
+    def __init__(self, bucket_id):
+        self.bucket_id = bucket_id
+        self.bucket = None
+
+    def apply(self, tweet_data, item, context):
+        if self.bucket is None:
+            self.bucket = NewsBucket.get(self.bucket_id, context)
+            if self.bucket is None:
+                return
+
         if self.matches(tweet_data):
-            immediate_add(self.bucket, item, self.context)
+            immediate_add(self.bucket, item, context)
 
 PUNC = re.compile('[^a-zA-Z0-9]+')
 def no_punc(x):
@@ -311,18 +317,17 @@ class TweetSorter(object):
     
     def __init__(self, context):
         self.context = context
-        self.refresh()
-        self._sorters = []
         self._rwlock = RWLock()
+        self._sorters = []
         self.refresh()
         
         
-    def create_sorter(self, filt_type, value, id):
+    def create_sorter(self, filt_type, value, bucket_id):
         # ? Extensible...
         if filt_type == 'track':
-            return TrackSorter(value, r.id)
+            return TrackSorter(value, bucket_id)
         elif filt_type == 'follow':
-            return FollowSorter(value, r.id)
+            return FollowSorter(value, bucket_id)
         else:
             return None
 
@@ -331,8 +336,8 @@ class TweetSorter(object):
         try:
             new_sorters = []
             for r in view_all_twitter_filters(self.context.db):
-                filt_type, value = r.key()
-                sorter = self._create_sorter(filt_type, value, r.id)
+                filt_type, value = r.key
+                sorter = self.create_sorter(filt_type, value, r.id)
                 if sorter is not None:
                     new_sorters.append(sorter)
             self._sorters = new_sorters
@@ -344,7 +349,7 @@ class TweetSorter(object):
         try:
             for sorter in self._sorters:
                 try:
-                    sorter.apply(tweet_data, item)
+                    sorter.apply(tweet_data, item, self.context)
                 except:
                     log.error("Error sorting tweet: %s: %s" % (tweet_data, traceback.format_exc()))
         finally:
@@ -365,7 +370,7 @@ class TweetSorterConsumer(TweetConsumer):
 
     def handle_message(self, message_data, message):
         try:
-            item = Tweet.create_from_tweet(message_data)
+            item = Tweet.create_from_tweet(message_data, self.context)
             item.save()
             self.sorter.sort(message_data, item)
         finally:
@@ -378,7 +383,7 @@ class TweetSorterConsumer(TweetConsumer):
     def close(self):
         TweetConsumer.close(self)
         # un-register callback from eventbus
-        context.event_bus.remove_listener(TWITTER_CHANNEL, self.twitter_event)
+        self.context.event_bus.remove_listener(TWITTER_CHANNEL, self.twitter_event)
 
 #################################################
 class TwitterStreamConnection(object):
@@ -414,7 +419,7 @@ class TwitterStreamConnection(object):
             try:
                 stream = MelkmanTweetStream(self.context)
                 while True:
-                    recieved_tweet(stream.next(), self.context)
+                    received_tweet(stream.next(), self.context)
                     if tcp_failures > 0 or other_failures > 0:
                         successes += 1
                         if successes > 100:

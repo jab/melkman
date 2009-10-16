@@ -1,12 +1,12 @@
 from __future__ import with_statement
 from carrot.messaging import Publisher, Consumer
-from eventlet.coros import event, Semaphore
-from eventlet.proc import spawn, waitall
+from eventlet.coros import event, semaphore
+from eventlet.proc import spawn
 from uuid import uuid1
 from melkman.green import resilient_consumer_loop
 
 def exchange_for_channel(channel):
-    return 'eventbus.%s' % channel
+    return 'eb.%s' % channel
 
 class EventPublisher(Publisher):
     exchange_type = 'fanout'
@@ -20,10 +20,11 @@ class EventPublisher(Publisher):
 class EventConsumer(Consumer):
     exchange_type = 'fanout'
     exclusive = True
+    durable = False
     no_ack = True
 
     def __init__(self, channel, context):
-        self._callback_lock = Semaphore(1)
+        self._callback_lock = semaphore(1)
         queue = 'eb_%s' % uuid1().hex
         Consumer.__init__(self, context.broker,
                           exchange=exchange_for_channel(channel),
@@ -35,12 +36,21 @@ class EventConsumer(Consumer):
 
     def remove_callback(self, callback):
         with self._callback_lock:
-            self.callbacks.remove(callback)
+            try:
+                self.callbacks.remove(callback)
+            except ValueError:
+                pass
 
-    def recieve(self, message_data, message):
+    def receive(self, message_data, message):
         with self._callback_lock:
-            Consumer.recieve(message_data, message)
-
+            for callback in self.callbacks:
+                try:
+                    callback(message_data, message)
+                except:
+                    log.error("Error during callback to message %s: %s" % 
+                              (message_data, traceback.format_exc()))
+                
+    
 class EventBus(object):
     """
     A simple broadcast transient event bus
