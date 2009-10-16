@@ -52,16 +52,16 @@ file to reflect the changes as well as
 tests/test.yaml
 
 $ cd melkman/scripts
-$ ./setup_rabbit.sh
+$ sudo ./setup_rabbit.sh
 ...
 
 
 Running tests
 -------------
-if you don't have nose, easy_install nose.
+if you don't have nose, easy_install nose. Then:
 
-$ cd melkman/tests
-$ nosetests -s
+(melkenv)$ cd melkman/tests
+(melkenv)$ nosetests -s
 .........................
 
 
@@ -73,14 +73,16 @@ current setup defined in your configuration yaml.
 The package contains some sensible defaults.
 
 
-$ cd melkman/scripts
-$ python ./shell.py ../dev.yaml
+(melkenv)$ cd melkman/scripts
+(melkenv)$ python ./shell.py ../dev.yaml
 
 Melkman Interactive Shell
 ...
 You may access the current context as "ctx"
 >>> ctx.bootstrap()
 ...
+
+Now you're ready to start doing something. Hooray!
 
 
 Doing Something
@@ -91,8 +93,8 @@ Running the test engine
 The test engine runs all of the engine's 
 services in one monolithic process.
 
-$ cd melkman/scripts
-$ python ./monobrain.py ../dev.yaml
+(melkenv)$ cd melkman/scripts
+(melkenv)$ python ./monobrain.py ../dev.yaml
 ...
 
 
@@ -100,8 +102,8 @@ Interacting with the engine
 ---------------------------
 Basically this means a python prompt atm :/ 
 
-$ cd melkman/scripts
-$ python ./shell.py ../dev.yaml
+(melkenv)$ cd melkman/scripts
+(melkenv)$ python ./shell.py ../dev.yaml
 
 Melkman Interactive Shell
 ...
