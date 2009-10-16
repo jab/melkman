@@ -74,12 +74,7 @@ The package contains some sensible defaults.
 
 
 (melkenv)$ cd melkman/scripts
-(melkenv)$ python ./shell.py ../dev.yaml
-
-Melkman Interactive Shell
-...
-You may access the current context as "ctx"
->>> ctx.bootstrap()
+(melkenv)$ python ./bootstrap.py ../dev.yaml
 ...
 
 Now you're ready to start doing something. Hooray!
