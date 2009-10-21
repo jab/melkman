@@ -39,8 +39,8 @@ class DocumentHelper(Document):
 
     @classmethod
     def get_by_ids(cls, ids, ctx):
-        for doc in ctx.db.view('_all_docs', keys=ids, include_docs=True):
-            instance = cls.from_doc(doc, ctx)
+        for row in ctx.db.view('_all_docs', keys=ids, include_docs=True):
+            instance = cls.from_doc(row.doc, ctx)
             instance.set_context(ctx)
             yield instance
 
