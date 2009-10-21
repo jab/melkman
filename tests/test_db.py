@@ -1,5 +1,25 @@
 from helpers import *
 
+def test_get_by_ids():
+    from melkman.db.util import DocumentHelper
+
+    ctx = fresh_context()
+
+    class Foo(DocumentHelper):
+        @classmethod
+        def from_doc(cls, doc, ctx):
+            instance = super(Foo, cls).from_doc(doc, ctx)
+            instance.flag = True
+            return instance
+
+    foo1 = Foo.create(ctx)
+    foo1.save()
+    foo2 = Foo.create(ctx)
+    foo2.save()
+
+    foo1, foo2 = Foo.get_by_ids((foo1.id, foo2.id), ctx)
+    assert foo1.flag and foo2.flag
+
 def test_db_util_doctest():
     import doctest
     from melkman.db import util
