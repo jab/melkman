@@ -139,7 +139,15 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
                 updated_refs.append(NewsItemRef.from_doc(ref, self.context))
             count = composite.filtered_update(updated_refs)
             if count > 0:
-                composite.save()
+                try:
+                    composite.save()
+                except ResourceConflict:
+                    # not a big deal in this case. This basically means
+                    # our timestamp did not become the latest -- we 
+                    # have made no alterations other than adding items.
+                    # Our additions succeed/fail independently of this as they
+                    # are separate documents.
+                    pass
         except:
             log.error("Error updating composite subscription %s: %s" % 
                       (message_data, traceback.format_exc()))
@@ -195,8 +203,16 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
                 except:
                     log.error("Error initializing subscription %s -> %s: %s" % (sub, cid, traceback.format_exc()))
             if updates > 0:
-                composite.save()
-                
+                try:
+                    composite.save()
+                except ResourceConflict: 
+                    # not a big deal in this case. This basically means
+                    # our timestamp did not become the latest -- we 
+                    # have made no alterations other than adding items.
+                    # Our additions succeed/fail independently of this as they
+                    # are separate documents.
+                    pass
+    
             # request that we start indexing anything new...
             for url in new_feeds:
                 request_feed_index(url, self.context)
