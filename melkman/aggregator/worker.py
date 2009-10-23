@@ -184,7 +184,7 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
                 
                 bucket = NewsBucket.get(sub, self.context)
                 if bucket is None:
-                    log.warn("Ingoring init subscription to unknown object (%s)" % composite.subscriptions[sub])
+                    log.warn("Ignoring init subscription to unknown object (%s)" % composite.subscriptions[sub])
                     continue
     
                 #  try 'casting' to a RemoteFeed
