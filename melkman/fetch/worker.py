@@ -205,11 +205,11 @@ class FeedIndexer(FeedIndexerConsumer):
             log.debug("completed handling message.")
 
     def handle_poll(self, url, message_data, message):
-        log.info('Recieved poll index request for %s' % url)
+        log.info('Received poll index request for %s' % url)
         index_feed_polling(url, self.context, request_info=message_data)
     
     def handle_push(self, url, message_data, message):
-        log.info('Recieved push index request for %s' % url)
+        log.info('Received push index request for %s' % url)
         try:
             content = message_data['content']
             index_feed_push(url, content, self.context, request_info=message_data)
