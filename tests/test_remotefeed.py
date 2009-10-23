@@ -28,7 +28,6 @@ def test_update_feed_repeat_index():
     test that indexing the same content twice has no effect
     """
     from melkman.db import RemoteFeed
-    from melkman.parse import parse_feed
     ctx = fresh_context()
     
     # create a document with a 10 entry feed
@@ -64,6 +63,36 @@ def test_update_feed_repeat_index():
     assert updates == 0
 
 
+def test_get_or_immediate_create_by_url():
+    """
+    test that get_or_immediate_create_by_url retrieves existing feeds by url
+    if they in fact exist, and creates them if they don't.
+    """
+    from datetime import datetime, timedelta
+    from eventlet.api import sleep
+    from melkman.db.remotefeed import RemoteFeed, get_or_immediate_create_by_url
+    ctx = fresh_context()
+
+    feed_url = 'http://example.org/1'
+    # make sure it doesn't exist yet
+    feed = RemoteFeed.get_by_url(feed_url, ctx)
+    assert feed is None
+
+    # this should result in its immediate creation
+    creationdt = datetime.utcnow()
+    feed = get_or_immediate_create_by_url(feed_url, ctx)
+    assert feed is not None
+    assert feed.last_modification_date - creationdt < timedelta(seconds=1)
+
+    sleep(1)
+    
+    # this should retrieve the existing feed, not create a new one
+    now = datetime.utcnow()
+    samefeed = get_or_immediate_create_by_url(feed_url, ctx)
+    assert samefeed.id == feed.id
+    assert samefeed.last_modification_date == feed.last_modification_date
+    assert now - samefeed.last_modification_date >= timedelta(seconds=1)
+
 
 def test_update_feed_partial_repeat():
     """
@@ -71,7 +100,6 @@ def test_update_feed_partial_repeat():
     updates new things.
     """
     from melkman.db import RemoteFeed
-    from melkman.parse import parse_feed
     ctx = fresh_context()
 
     # create a document with a 10 entry feed
