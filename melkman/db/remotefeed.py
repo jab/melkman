@@ -106,9 +106,10 @@ class RemoteFeed(NewsBucket):
 
     def record_update_info(self, **info):
         self.update_history.insert(0, HistoryItem(**info))
+
         while len(self.update_history) > MAX_HISTORY:
-            self.update_history.pop()
-            
+            del self.update_history[-1]
+
     def update_from_feed(self, content, method):
         """
         updates this feed from the unparsed feed content given. 
