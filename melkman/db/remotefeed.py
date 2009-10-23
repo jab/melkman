@@ -69,9 +69,28 @@ class RemoteFeed(NewsBucket):
         self._updated_news_items = {}
 
     @classmethod
+    def get_by_url(cls, url, context):
+        fid = cls.id_for_url(url)
+        return cls.get(fid, context)
+
+    @classmethod
     def create_from_url(self, url, context, **kw):
         feed_id = self.id_for_url(url)
         return RemoteFeed.create(context, feed_id, url=url, **kw)
+
+    @classmethod
+    def get_or_create_by_url(self, url, context, **kw):
+        instance = RemoteFeed.get_by_url(url, context, **kw)
+        if instance is None:
+            try:
+                instance = RemoteFeed.create_from_url(url, context)
+                instance.save()
+            except ResourceConflict: # someone beat us to it
+                instance = RemoteFeed.get_by_url(url, context)
+                if instance is None:
+                    log.warn('Could not get or create feed for %s' % url)
+        return instance
+
 
     feed_info = DibjectField()
 
@@ -137,11 +156,6 @@ class RemoteFeed(NewsBucket):
     def id_for_url(cls, url):
         nurl = canonical_url(url).lower()
         return melk_id(nurl)
-
-    @classmethod
-    def get_by_url(cls, url, context):
-        fid = cls.id_for_url(url)
-        return cls.get(fid, context)
 
     @classmethod
     def lookup_by_urls(cls, urls, context):
