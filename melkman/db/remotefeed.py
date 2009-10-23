@@ -78,20 +78,6 @@ class RemoteFeed(NewsBucket):
         feed_id = self.id_for_url(url)
         return RemoteFeed.create(context, feed_id, url=url, **kw)
 
-    @classmethod
-    def get_or_create_by_url(self, url, context, **kw):
-        instance = RemoteFeed.get_by_url(url, context, **kw)
-        if instance is None:
-            try:
-                instance = RemoteFeed.create_from_url(url, context)
-                instance.save()
-            except ResourceConflict: # someone beat us to it
-                instance = RemoteFeed.get_by_url(url, context)
-                if instance is None:
-                    log.warn('Could not get or create feed for %s' % url)
-        return instance
-
-
     feed_info = DibjectField()
 
     # next time to poll feed
@@ -163,6 +149,21 @@ class RemoteFeed(NewsBucket):
         return cls.get_by_ids([cls.id_for_url(u) for u in urls], context)
 
 
+def get_or_immediate_create_by_url(url, context, **kw):
+    """
+    Get the RemoteFeed for the given url if it exists or immediately create it
+    in the database if it does not.
+    """
+    feed = RemoteFeed.get_by_url(url, context, **kw)
+    if feed is None:
+        try:
+            feed = RemoteFeed.create_from_url(url, context)
+            feed.save()
+        except ResourceConflict: # someone beat us to it
+            feed = RemoteFeed.get_by_url(url, context)
+            if feed is None:
+                log.warn('Could not get or create feed for %s' % url)
+    return feed
 
 
 view_remote_feeds_by_next_poll_time = ViewDefinition('remote_feed_indices', 'remote_feeds_by_next_poll_time', 
