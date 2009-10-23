@@ -41,7 +41,9 @@ setup(
                       'melk.util',
                       'simplejson',
                       'PyYAML',
-                      'WebOb'
+                      'WebOb',
+                      'tweetstream',
+                      'python-twitter'
     ],
     dependency_links=[
     ],
