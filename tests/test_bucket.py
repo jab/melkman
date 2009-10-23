@@ -295,5 +295,5 @@ def test_bucket_conflict_does_not_stop_item_additions():
     b3 = NewsBucket.get(bucket.id, ctx)
     for iid in items1:
         assert iid in b3.entries
-    for iid2 in items2:
+    for iid in items2:
         assert iid in b3.entries
