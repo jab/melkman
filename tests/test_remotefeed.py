@@ -239,5 +239,18 @@ def test_delete():
     for iid in items:
         assert not iid in ctx.db
 
-# missing:
-# test history entries
+def test_max_history_len():
+    from melkman.db.remotefeed import RemoteFeed, MAX_HISTORY
+    ctx = fresh_context()
+
+    feed_url = 'http://example.org/feeds/1'
+    rf = RemoteFeed.create_from_url(feed_url, ctx)
+
+    for i in range(5*MAX_HISTORY):
+        reason = 'update %d' % i
+        rf.record_update_info(reason=reason)
+        if i < MAX_HISTORY:
+            assert len(rf.update_history) == i + 1
+        else:
+            assert len(rf.update_history) == MAX_HISTORY
+        assert rf.update_history[0].reason == reason

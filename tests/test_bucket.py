@@ -244,3 +244,56 @@ def test_immediate_add():
     # it should also show up in the bucket.
     for item in items:
         assert bucket.has_news_item(item)
+
+
+def test_bucket_conflict_does_not_stop_item_additions():
+    """
+    This tests that item additions succeed independently from 
+    changes to the bucket document. Workers rely on this 
+    property to ignore certain conflicts and should be updated
+    if it is no longer true.
+    """
+    from couchdb import ResourceConflict
+    from melkman.db.bucket import NewsBucket
+    ctx = fresh_context()
+    
+    bucket = NewsBucket.create(ctx)
+    bucket.save()
+    
+    
+    # create two copies of the bucket and modify them 
+    # 'simultaneously' by adding items to each.
+    b1 = NewsBucket.get(bucket.id, ctx)
+    b2 = NewsBucket.get(bucket.id, ctx)
+    
+    items1 = [random_id() for i in range(10)]
+    items2 = [random_id() for i in range(10)]
+    
+    for iid in items1:
+        b1.add_news_item(iid)
+        
+    for iid in items2:
+        b2.add_news_item(iid)
+        
+    
+    # this should work, but cause a conflict 
+    # when b2 is saved since the version will 
+    # change.
+    b1.save()
+    
+    try:
+        b2.save()
+    except ResourceConflict:
+        pass
+    else:
+        assert 0, 'expected ResourceConflict'
+        
+        
+    # nevertheless, the items added in both cases
+    # should be a part of the bucket if we look it 
+    # up again.
+    b3 = NewsBucket.get(bucket.id, ctx)
+    for iid in items1:
+        assert iid in b3.entries
+    for iid in items2:
+        assert iid in b3.entries
