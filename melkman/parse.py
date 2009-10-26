@@ -77,11 +77,10 @@ def parse_feed(content, feed_url):
 
     out_entries = []
     for e in ff.get('entries', []):
-        
         # make sure it has an id
         eid = e.get('id', None)
         if eid is None:
-            eid = find_best_entry_id(entry)
+            eid = find_best_entry_id(e)
             if eid is None:
                 # throw this entry out, it has no 
                 # id, title, summary or content
