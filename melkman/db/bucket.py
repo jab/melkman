@@ -44,7 +44,7 @@ class NewsItem(DocumentHelper):
     def item_id(self):
         return self.id
 
-    timestamp = DateTimeField(default=datetime.utcnow())
+    timestamp = DateTimeField(default=datetime.utcnow)
     title = TextField()
     author = TextField()
     link = TextField()
@@ -69,8 +69,8 @@ class NewsItemRef(DocumentHelper):
 
     item_id = TextField()
     bucket_id = TextField()
-    timestamp = DateTimeField(default=datetime.utcnow())
-    add_time = DateTimeField(default=datetime.utcnow())
+    timestamp = DateTimeField(default=datetime.utcnow)
+    add_time = DateTimeField(default=datetime.utcnow)
     title = TextField()
     author = TextField()
     link = TextField()
