@@ -147,7 +147,7 @@ class TestHTTPServer(object):
     def __call__(self, environ, start_response):
         res = Response()
         res.status = 404
-        return res
+        return res(environ, start_response)
 
 class FileServer(TestHTTPServer):
     """
