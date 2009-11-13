@@ -207,7 +207,7 @@ class NewsBucket(DocumentHelper):
                 self._removed_item(self._entries[item])
                 del self._entries[item]
                 return True
-            elif hasattr(item_id, 'item_id'):
+            elif hasattr(item, 'item_id'):
                 self._removed_item(self._entries[item.item_id])
                 del self._entries[item.item_id]
                 return True
