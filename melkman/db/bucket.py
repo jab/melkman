@@ -221,10 +221,9 @@ class NewsBucket(DocumentHelper):
 
         if isinstance(item, basestring):
             return item in self._entries
-        elif hasattr(item, 'item_id'):
+        if hasattr(item, 'item_id'):
             return item.item_id in self._entries
-        else:
-            return False
+        return False
 
     def filter_entries(self, predicate):
         self._lazy_load_entries()
