@@ -1,5 +1,5 @@
 from copy import deepcopy
-from couchdb import ResourceNotFound
+from couchdb import ResourceConflict, ResourceNotFound
 from eventlet.api import spawn, sleep
 import logging
 import traceback
