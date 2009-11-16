@@ -95,4 +95,3 @@ class EventBus(object):
     def kill(self):
         for p in self._procs.values():
             p.kill()
-        waitall(self._procs.values())
