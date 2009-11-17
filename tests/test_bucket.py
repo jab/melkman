@@ -27,7 +27,6 @@ def test_bucket_add_remove():
     test adding and removing a single item from a bucket
     """
     from melkman.db import NewsBucket
-
     ctx = fresh_context()
     
     # create a bucket
@@ -58,9 +57,7 @@ def test_bucket_silent_nodupes():
     tests that calling add_news_item with the 
     same item twice only adds the item once.
     """
-    
     from melkman.db import NewsBucket
-
     ctx = fresh_context()
     
     # create a bucket and add an item to it
@@ -297,3 +294,63 @@ def test_bucket_conflict_does_not_stop_item_additions():
         assert iid in b3.entries
     for iid in items2:
         assert iid in b3.entries
+
+
+def test_bucket_maxlen():
+    """
+    Test that bucket with maxlen behaves as expected
+    """
+    from melkman.db.bucket import NewsBucket, NewsItemRef
+    from datetime import datetime, timedelta
+    from operator import attrgetter
+    ctx = fresh_context()
+    
+    # add 10 items spaced an hour apart to a bucket of max-length 3
+    maxlen = 3
+    sortkey = attrgetter('timestamp')
+    bucket = NewsBucket.create(ctx, maxlen=maxlen, sortkey=sortkey)
+    items = []
+    timestamp = datetime.utcnow()
+    for i in xrange(10):
+        item = NewsItemRef.create_from_info(ctx, bucket.id,
+            item_id=random_id(),
+            timestamp=timestamp - timedelta(hours=i),
+            )
+        items.append(item)
+        bucket.add_news_item(item)
+
+    # make sure the bucket has only the maxlen latest items
+    # before and after saving
+    idgetter = attrgetter('item_id')
+    sorteditemsids = map(idgetter, sorted(items, key=sortkey))
+    def ids_by_timestamp(entries):
+        return map(idgetter, sorted(entries.values(), key=sortkey))
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+    bucket.save()
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+
+    # decrease maxlen and make sure bucket.entries remains consistent
+    maxlen -= 1
+    bucket.maxlen = maxlen
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+
+    # now increase maxlen so that the bucket is under capacity and check consistency
+    maxlen += 2
+    bucket.maxlen = maxlen
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-len(bucket.entries):]
+    bucket.save()
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-len(bucket.entries):]
+
+    # fill to capacity and check that the new maxlen is maintained
+    for i in items:
+        bucket.add_news_item(i)
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+    bucket.save()
+    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+
+    # now set the maxlen to None to make an unbounded bucket, add items and
+    # check that they're all accommodated
+    bucket.maxlen = None
+    for i in items:
+        bucket.add_news_item(i)
+    assert set(bucket.entries.keys()) == set(sorteditemsids)

@@ -22,6 +22,7 @@ from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
 import logging
+from melk.util.nldict import NLDict, maybe_nldict
 from melk.util.nonce import nonce_str
 from melk.util.hash import melk_id
 
@@ -130,6 +131,28 @@ class NewsBucket(DocumentHelper):
         self._entries = None # lazy load
         self._removed = {}
         self._updated = {}
+        self._maxlen = kw.get('maxlen')
+        self._sortkey = kw.get('sortkey')
+
+    def _maxlen_get(self):
+        return self._maxlen
+
+    def _maxlen_set(self, value):
+        self._lazy_load_entries()
+        self._maxlen = value
+        if value is not None:
+            if hasattr(self._entries, 'maxlen'):
+                # self._entries is an NLDict, just update its maxlen and it will
+                # take care of removing excess items automatically if necessary
+                self._entries.maxlen = value
+            else: # self._entries is a regular dict, convert to NLDict
+                self._entries = NLDict(value, self._sortkey, self._entries)
+        else:
+            if hasattr(self._entries, 'maxlen'):
+                # self._entries is an NLDict, convert to regular dict
+                self._entries = dict(self._entries)
+
+    maxlen = property(_maxlen_get, _maxlen_set)
 
     @classmethod
     def create(cls, context, *args, **kw):
@@ -147,7 +170,7 @@ class NewsBucket(DocumentHelper):
         if self._entries is not None:
             return
         
-        self._entries = {}
+        self._entries = maybe_nldict(self._maxlen, self._sortkey)
         
         # not saved in db.
         if self.id is None or self.rev is None:
@@ -207,12 +230,11 @@ class NewsBucket(DocumentHelper):
                 self._removed_item(self._entries[item])
                 del self._entries[item]
                 return True
-            elif hasattr(item_id, 'item_id'):
+            if hasattr(item, 'item_id'):
                 self._removed_item(self._entries[item.item_id])
                 del self._entries[item.item_id]
                 return True
-            else:
-                return False
+            return False
         except KeyError:
             return False
 
@@ -221,10 +243,9 @@ class NewsBucket(DocumentHelper):
 
         if isinstance(item, basestring):
             return item in self._entries
-        elif hasattr(item, 'item_id'):
+        if hasattr(item, 'item_id'):
             return item.item_id in self._entries
-        else:
-            return False
+        return False
 
     def filter_entries(self, predicate):
         self._lazy_load_entries()
