@@ -1,4 +1,5 @@
 from carrot.messaging import Publisher, Consumer
+from collections import defaultdict
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
@@ -25,12 +26,12 @@ log = logging.getLogger(__name__)
 def tweet_trace(tweet):
     tt = {}
     tt['item_id'] = 'tweet:%s' % tweet.get('id')
-    tt['title'] = '' # ???
+    tt['title'] = '' # XXX
     tt['author'] = '@%s' % tweet.get('user', {}).get('screen_name')
     tt['summary'] = tweet.get('text', '')
     tt['timestamp'] = tweet.get('created_at')
     tt['source_title'] = 'Twitter'
-    # tt['source_url'] = ???
+    # tt['source_url'] = XXX
     return tt
 
 class Tweet(NewsItem):
@@ -40,11 +41,9 @@ class Tweet(NewsItem):
     def create_from_tweet(cls, tweet, context):
         tt = tweet_trace(tweet)
         tt['details'] = tweet
-        tid = tt['item_id']
-        del tt['item_id']
+        tid = tt.pop('item_id')
         return cls.create(context, tid, **tt)
-
-        return 'tweet:%s' % tweet_id
+        #return 'tweet:%s' % tweet_id # XXX
 
 class TweetRef(NewsItemRef):
     document_types = ListField(TextField(), default=['NewsItemRef', 'TweetRef'])
@@ -129,10 +128,9 @@ class MelkmanTweetStream(TweetStream):
                              url=filter_url)
 
     def _get_post_data(self):
-        filters = {}
+        filters = defaultdict(list)
         for r in view_all_twitter_filters(self.context.db):
             ftype, val = r.key
-            filters.setdefault(ftype, [])
             filters[ftype].append(val)
         
         post_data = {}
@@ -188,6 +186,9 @@ class BasicSorter(object):
     def __init__(self, bucket_id):
         self.bucket_id = bucket_id
         self.bucket = None
+
+    def matches(self, tweet):
+        raise NotImplementedError
 
     def apply(self, tweet_data, item, context):
         if self.bucket is None:
@@ -314,7 +315,6 @@ class FollowSorter(BasicSorter):
         return False
 
 class TweetSorter(object):
-    
     def __init__(self, context):
         self.context = context
         self._rwlock = RWLock()
@@ -392,7 +392,7 @@ class TwitterStreamConnection(object):
         self.context = context
         self._reader = None
 
-    def run():
+    def run(self):
         try:
             self.context.event_bus.add_listener(TWITTER_CHANNEL, self.twitter_event)
             while(True):
@@ -415,7 +415,7 @@ class TwitterStreamConnection(object):
         other_failures = 0
         successes = 0
         stream = None
-        while(True):
+        while True:
             try:
                 stream = MelkmanTweetStream(self.context)
                 while True:
