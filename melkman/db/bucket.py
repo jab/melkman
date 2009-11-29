@@ -22,7 +22,7 @@ from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
 import logging
-from melk.util.nldict import NLDict, maybe_nldict
+from melk.util.nldict import nldict, maybe_nldict
 from melk.util.nonce import nonce_str
 from melk.util.hash import melk_id
 
@@ -142,14 +142,14 @@ class NewsBucket(DocumentHelper):
         self._maxlen = value
         if value is not None:
             if hasattr(self._entries, 'maxlen'):
-                # self._entries is an NLDict, just update its maxlen and it will
+                # self._entries is an nldict, just update its maxlen and it will
                 # take care of removing excess items automatically if necessary
                 self._entries.maxlen = value
-            else: # self._entries is a regular dict, convert to NLDict
-                self._entries = NLDict(value, self._sortkey, self._entries)
+            else: # self._entries is a regular dict, convert to nldict
+                self._entries = nldict(value, self._sortkey, self._entries)
         else:
             if hasattr(self._entries, 'maxlen'):
-                # self._entries is an NLDict, convert to regular dict
+                # self._entries is an nldict, convert to regular dict
                 self._entries = dict(self._entries)
 
     maxlen = property(_maxlen_get, _maxlen_set)
