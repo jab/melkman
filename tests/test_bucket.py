@@ -329,7 +329,7 @@ def test_bucket_maxlen():
         return map(idgetter, sorted(entries.values(), key=sortkey))
 
     def check_before_and_after_save(bucket):
-        bucketlen = len(bucket.entries)
+        bucketlen = len(bucket)
         if bucket.maxlen is not None:
             assert bucketlen <= bucket.maxlen
 

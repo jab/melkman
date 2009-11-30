@@ -136,6 +136,9 @@ class NewsBucket(DocumentHelper):
         self._maxlen = kw.get('maxlen')
         self._sortkey = kw.get('sortkey')
 
+    def __len__(self):
+        return len(self.entries)
+
     def _maxlen_get(self):
         return self._maxlen
 
