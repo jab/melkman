@@ -321,36 +321,59 @@ def test_bucket_maxlen():
 
     # make sure the bucket has only the maxlen latest items
     # before and after saving
+
     idgetter = attrgetter('item_id')
     sorteditemsids = map(idgetter, sorted(items, key=sortkey))
+
     def ids_by_timestamp(entries):
         return map(idgetter, sorted(entries.values(), key=sortkey))
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
-    bucket.save()
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+
+    def check_before_and_after_save(bucket):
+        bucketlen = len(bucket.entries)
+        if bucket.maxlen is not None:
+            assert bucketlen <= bucket.maxlen
+
+        assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
+        bucket.save()
+
+        # XXX this throws away maxlen and sortkey! persist them?
+        maxlen = bucket.maxlen
+        bucket = NewsBucket.get(bucket.id, ctx)
+        bucket.maxlen = maxlen
+        bucket._sortkey = sortkey
+
+        assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
+
+        return bucket
+
+    bucket = check_before_and_after_save(bucket)
 
     # decrease maxlen and make sure bucket.entries remains consistent
     maxlen -= 1
     bucket.maxlen = maxlen
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+    bucket = check_before_and_after_save(bucket)
 
     # now increase maxlen so that the bucket is under capacity and check consistency
     maxlen += 2
     bucket.maxlen = maxlen
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-len(bucket.entries):]
-    bucket.save()
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-len(bucket.entries):]
+    bucket = check_before_and_after_save(bucket)
 
     # fill to capacity and check that the new maxlen is maintained
     for i in items:
         bucket.add_news_item(i)
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
-    bucket.save()
-    assert ids_by_timestamp(bucket.entries) == sorteditemsids[-maxlen:]
+
+    bucket = check_before_and_after_save(bucket)
 
     # now set the maxlen to None to make an unbounded bucket, add items and
     # check that they're all accommodated
     bucket.maxlen = None
     for i in items:
         bucket.add_news_item(i)
-    assert set(bucket.entries.keys()) == set(sorteditemsids)
+
+    bucket = check_before_and_after_save(bucket)
+
+
+    # XXX
+    # if you add something to the dictionary directly (rather than going
+    # through the interface) before the save, make sure it's there after the
+    # save

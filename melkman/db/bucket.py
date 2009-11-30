@@ -22,7 +22,7 @@ from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
 import logging
-from melk.util.nldict import nldict, maybe_nldict
+from melk.util.nldict import nldict
 from melk.util.nonce import nonce_str
 from melk.util.hash import melk_id
 
@@ -36,6 +36,7 @@ __all__ = ['NewsItem', 'NewsBucket',
            'view_entries_by_add_time']
 
 log = logging.getLogger(__name__)
+
 
 class NewsItem(DocumentHelper):
 
@@ -112,6 +113,7 @@ class NewsItemRef(DocumentHelper):
     def dbid(cls, bucket_id, item_id):
         return '%s_%s' % (bucket_id, item_id)
 
+
 class NewsBucket(DocumentHelper):
 
     document_types = ListField(TextField(), default=['NewsBucket'])
@@ -138,19 +140,11 @@ class NewsBucket(DocumentHelper):
         return self._maxlen
 
     def _maxlen_set(self, value):
-        self._lazy_load_entries()
+        if self._maxlen == value:
+            return
         self._maxlen = value
-        if value is not None:
-            if hasattr(self._entries, 'maxlen'):
-                # self._entries is an nldict, just update its maxlen and it will
-                # take care of removing excess items automatically if necessary
-                self._entries.maxlen = value
-            else: # self._entries is a regular dict, convert to nldict
-                self._entries = nldict(value, self._sortkey, self._entries)
-        else:
-            if hasattr(self._entries, 'maxlen'):
-                # self._entries is an nldict, convert to regular dict
-                self._entries = dict(self._entries)
+        if self._entries is not None:
+            self._entries.maxlen = value
 
     maxlen = property(_maxlen_get, _maxlen_set)
 
@@ -166,11 +160,20 @@ class NewsBucket(DocumentHelper):
         self._lazy_load_entries()
         return self._entries
 
+    def mapping_set(self, map, key, val):
+        assert map is self._entries
+        self._updated_item(val)
+
+    def mapping_deleted(self, map, key, val):
+        assert map is self._entries
+        self._removed_item(val)
+
     def _lazy_load_entries(self):
         if self._entries is not None:
             return
         
-        self._entries = maybe_nldict(self._maxlen, self._sortkey)
+        self._entries = nldict(self._maxlen, self._sortkey)
+        self._entries.observers.append(self)
         
         # not saved in db.
         if self.id is None or self.rev is None:
@@ -203,35 +206,29 @@ class NewsBucket(DocumentHelper):
             current_item = self._entries[item.item_id]
             if item.timestamp is None or item.timestamp <= current_item.timestamp:
                 return False
-            else:
-                current_item.update_from(item)
-                self._updated_item(current_item)
-                return True
-
-        # if it's currently in the trash, we remove it from 
-        # the trash and unconditionally update it
-        elif item.item_id in self._removed:
-            current_item = self._removed[item.item_id]
             current_item.update_from(item)
-            self._entries[item.item_id] = current_item
             self._updated_item(current_item)
             return True
 
-        # a new item
-        else:
-            self._entries[item.item_id] = item
-            self._updated_item(item)
+        # if it's currently in the trash, we remove it from 
+        # the trash and unconditionally update it
+        if item.item_id in self._removed:
+            current_item = self._removed[item.item_id]
+            current_item.update_from(item)
+            self._entries[item.item_id] = current_item
             return True
+
+        # a new item
+        self._entries[item.item_id] = item
+        return True
 
     def remove_news_item(self, item):
         self._lazy_load_entries()
         try:
             if isinstance(item, basestring):
-                self._removed_item(self._entries[item])
                 del self._entries[item]
                 return True
             if hasattr(item, 'item_id'):
-                self._removed_item(self._entries[item.item_id])
                 del self._entries[item.item_id]
                 return True
             return False
@@ -255,16 +252,12 @@ class NewsBucket(DocumentHelper):
             if not predicate(v):
                 kill_keys.append(k)
         for k in kill_keys:
-            self._removed_item(self._entries[k])
             del self._entries[k]
-
         return kill_keys
 
     def clear(self):
         self._lazy_load_entries()
-        for item in self._entries.values():
-            self._removed_item(item)
-        self._entries = {}
+        self._entries.clear()
 
     def save(self):
         self.last_modification_date = datetime.utcnow()
@@ -333,14 +326,14 @@ class NewsBucket(DocumentHelper):
 
     def _removed_item(self, item):
         updated = self._updated.get(item.item_id, None)
-        if updated is None:
-            self._removed[item.item_id] = item
-        else:
+        if updated is not None:
             del self._updated[item.item_id]
             # only keep previously saved items in the
             # removed list.
             if updated.rev is not None:
                 self._removed[item.item_id] = item
+        else:
+            self._removed[item.item_id] = item
     
     def _clobber(self, item):
         if self._entries is not None:
