@@ -21,6 +21,7 @@ from couchdb import ResourceConflict
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
+from functools import wraps
 import logging
 from melk.util.nldict import nldict
 from melk.util.nonce import nonce_str
@@ -158,9 +159,31 @@ class NewsBucket(DocumentHelper):
             args = [melk_id(nonce_str())]
         return super(NewsBucket, cls).create(context, *args, **kw)
 
+    def _lazy_load_entries(method, force=False):
+        @wraps(method, ('__name__', '__doc__'))
+        def wrapper(self, *args, **kwds):
+            if force or self._entries is None:
+                self._entries = nldict(self._maxlen, self._sortkey)
+                self._entries.observers.append(self)
+                
+                # saved in db
+                if not (self.id is None or self.rev is None):
+                    query = {
+                        'startkey': self.id,
+                        'endkey': self.id + '0',
+                        'include_docs': True,
+                    }
+                    for r in view_entries(self._context.db, **query):
+                        ref = NewsItemRef.from_doc(r.doc, self._context)
+                        self._entries[ref.item_id] = ref
+
+            return method(self, *args, **kwds)
+
+        return wrapper
+
     @property
+    @_lazy_load_entries
     def entries(self):
-        self._lazy_load_entries()
         return self._entries
 
     def mapping_set(self, map, key, val):
@@ -171,29 +194,8 @@ class NewsBucket(DocumentHelper):
         assert map is self._entries
         self._removed_item(val)
 
-    def _lazy_load_entries(self):
-        if self._entries is not None:
-            return
-        
-        self._entries = nldict(self._maxlen, self._sortkey)
-        self._entries.observers.append(self)
-        
-        # not saved in db.
-        if self.id is None or self.rev is None:
-            return
-
-        query = {
-            'startkey': self.id,
-            'endkey': self.id + '0',
-            'include_docs': True,
-        }
-        for r in view_entries(self._context.db, **query):
-            ref = NewsItemRef.from_doc(r.doc, self._context)
-            self._entries[ref.item_id] = ref
-
+    @_lazy_load_entries
     def add_news_item(self, item):
-        self._lazy_load_entries()
-
         if isinstance(item, basestring):
             item = NewsItemRef.create_from_info(self._context, self.id, item_id=item)
         elif isinstance(item, NewsItem) or isinstance(item, NewsItemRef):
@@ -225,8 +227,8 @@ class NewsBucket(DocumentHelper):
         self._entries[item.item_id] = item
         return True
 
+    @_lazy_load_entries
     def remove_news_item(self, item):
-        self._lazy_load_entries()
         try:
             if isinstance(item, basestring):
                 del self._entries[item]
@@ -238,18 +240,16 @@ class NewsBucket(DocumentHelper):
         except KeyError:
             return False
 
+    @_lazy_load_entries
     def has_news_item(self, item):
-        self._lazy_load_entries()
-
         if isinstance(item, basestring):
             return item in self._entries
         if hasattr(item, 'item_id'):
             return item.item_id in self._entries
         return False
 
+    @_lazy_load_entries
     def filter_entries(self, predicate):
-        self._lazy_load_entries()
-        
         kill_keys = []
         for (k, v) in self._entries.iteritems():
             if not predicate(v):
@@ -258,8 +258,8 @@ class NewsBucket(DocumentHelper):
             del self._entries[k]
         return kill_keys
 
+    @_lazy_load_entries
     def clear(self):
-        self._lazy_load_entries()
         self._entries.clear()
 
     def save(self):
@@ -354,11 +354,10 @@ class NewsBucket(DocumentHelper):
 
     def delete(self):
         dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
-        self._entries = None
-        self._lazy_load_entries()
         for e in self._entries.values():
             dels.append({'_id': e.id, '_rev': e.rev, '_deleted': True})
         self._context.db.update(dels)
+    delete = _lazy_load_entries(delete, force=True)
 
 
 def immediate_add(bucket, item, context, notify=True):
