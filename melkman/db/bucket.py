@@ -187,10 +187,16 @@ class NewsBucket(DocumentHelper):
         return self._entries
 
     def mapping_set(self, map, key, val):
+        """
+        Callback invoked when a mapping in self._entries is set.
+        """
         assert map is self._entries
         self._updated_item(val)
 
     def mapping_deleted(self, map, key, val):
+        """
+        Callback invoked when a mapping in self._entries is deleted.
+        """
         assert map is self._entries
         self._removed_item(val)
 
