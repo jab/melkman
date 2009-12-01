@@ -126,7 +126,7 @@ class NewsBucket(DocumentHelper):
     creation_date = DateTimeField(default=datetime.utcnow)
 
     def __init__(self, *args, **kw):
-        if len(args) == 0 and not 'id' in kw:
+        if not args and not 'id' in kw:
             log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         
@@ -154,7 +154,7 @@ class NewsBucket(DocumentHelper):
 
     @classmethod
     def create(cls, context, *args, **kw):
-        if len(args) == 0 and not 'id' in kw:
+        if not args and not 'id' in kw:
             log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         return super(NewsBucket, cls).create(context, *args, **kw)
@@ -307,9 +307,9 @@ class NewsBucket(DocumentHelper):
                 conflicts = True
         
         kw = {}
-        if len(successful_updates) > 0:
+        if successful_updates:
             kw['updated_items'] = [x.unwrap() for x in successful_updates]
-        if len(successful_deletes) > 0:
+        if successful_deletes:
             kw['removed_items'] = [x.unwrap() for x in successful_deletes]
         self._send_modified_event(**kw)
         self._updated = {}
@@ -396,7 +396,7 @@ def immediate_add(bucket, item, context, notify=True):
         current_item.save()
         bucket._clobber(current_item)        
         
-        if notify == True:
+        if notify:
             notify_bucket_modified(bucket, context, updated_items=[current_item.unwrap()])
 
         return True
