@@ -379,7 +379,7 @@ def test_bucket_maxlen():
     bucket.save()
     assert len(bucket) == 0
     item = items[0]
-    bucket._entries[item.item_id] = item
+    bucket.entries[item.item_id] = item
     assert bucket.has_news_item(item)
     bucket.save()
     assert bucket.has_news_item(item)
