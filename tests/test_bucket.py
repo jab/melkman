@@ -373,7 +373,13 @@ def test_bucket_maxlen():
     bucket = check_before_and_after_save(bucket)
 
 
-    # XXX
-    # if you add something to the dictionary directly (rather than going
-    # through the interface) before the save, make sure it's there after the
-    # save
+    # if you add something to bucket._entries directly rather than going
+    # through the interface, make sure it's there after saving
+    bucket.clear()
+    bucket.save()
+    assert len(bucket) == 0
+    item = items[0]
+    bucket._entries[item.item_id] = item
+    assert bucket.has_news_item(item)
+    bucket.save()
+    assert bucket.has_news_item(item)
