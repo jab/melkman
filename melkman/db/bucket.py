@@ -320,7 +320,7 @@ class NewsBucket(DocumentHelper):
             self._entries = None
 
         if not main_doc_saved:
-            raise main_doc_result
+            raise Exception(main_doc_result)
 
 
     def _send_modified_event(self, *args, **kw):
