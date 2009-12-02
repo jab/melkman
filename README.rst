@@ -1,138 +1,150 @@
-Melkman is a feed aggregating, sorting and filtering 
-engine based on CouchDB, RabbitMQ and eventlet.
+Overview
+========
+
+Melkman is a feed aggregating, sorting and filtering engine based on CouchDB,
+RabbitMQ and eventlet.
 
 This is mostly a pre-alpha work-in-progress at the moment.
 
-Requirements: 
 
-Python
-CouchDB  - http://couchdb.apache.org/
-RabbitMQ - http://www.rabbitmq.com/
+Requirements
+============
 
-==================
-Install
-==================
+- `Python <http://www.python.org/>`_
+- `CouchDB <http://couchdb.apache.org/>`_
+- `RabbitMQ <http://www.rabbitmq.com/>`_
 
-It is recommended that you install melkman into a virtualenv. So if you 
-have not already, first install virtualenv and pip:
-$ easy_install virtualenv
-...
-$ easy_install pip
-...
 
-Great, now install melkman and dependencies into a new env:
+Installation
+============
 
-$ virtualenv melkenv
-$ pip -E melkenv install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
-...
+It is recommended that you install melkman into a virtualenv. So if you have
+not already, first install virtualenv and pip::
+
+    $ easy_install virtualenv
+    ...
+    $ easy_install pip
+    ...
+
+Great, now install melkman and dependencies into a new env::
+
+    $ virtualenv melkenv
+    $ pip -E melkenv install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
+    ...
 
 This will install melkman as an editable package in melkenv/src/melkman.
 
-==================
-QuickStart
-==================
 
-There isn't much of an interface on top of things right now, 
-but there are some ways to poke around...
+Quick Start
+===========
 
-Setting up
-==========
+There isn't much of an interface on top of things right now, but there are
+some ways to poke around...
 
-Starting Other stuff
---------------------
-make sure couchdb and rabbitmq are running...
+Make sure sure couchdb and rabbitmq are running before doing the following:
 
-
+-------------------------------------
 Set up rabbitmq users / virtual hosts 
---------------------------------------
+-------------------------------------
+
 A few rabbit specific commands need to be run to 
 set things up.  If you adjust the defaults, 
 be sure to also change your configuration yaml 
 file to reflect the changes as well as 
-tests/test.yaml
+tests/test.yaml::
 
-$ cd melkman/scripts
-$ sudo ./setup_rabbit.sh
-...
+    $ cd melkman/scripts
+    $ sudo ./setup_rabbit.sh
+    ...
 
 
+-------------
 Running tests
 -------------
-if you don't have nose, easy_install nose. Then:
 
-(melkenv)$ cd melkman/tests
-(melkenv)$ nosetests -s
-.........................
+If you don't have nose, run ``easy_install nose`` inside your virtualenv.
+Then::
+
+    (melkenv)$ cd melkman/tests
+    (melkenv)$ nosetests -s
+    .........................
 
 
+------------------------------
 Bootstrap database and plugins
 ------------------------------
-To create the necessary databases, views and 
-rabbit queues, you can run the bootstrap operation on the 
-current setup defined in your configuration yaml.  
-The package contains some sensible defaults.
 
+To create the necessary databases, views, and rabbit queues, you can run
+the bootstrap operation on the current setup defined in your configuration
+yaml. The package contains some sensible defaults::
 
-(melkenv)$ cd melkman/scripts
-(melkenv)$ python ./bootstrap.py ../dev.yaml
-...
+    (melkenv)$ cd melkman/scripts
+    (melkenv)$ python ./bootstrap.py ../dev.yaml
+    ...
 
 Now you're ready to start doing something. Hooray!
+
 
 
 Doing Something
 ===============
 
-Running the test engine
------------------------
-The test engine runs all of the engine's 
-services in one monolithic process.
+------------------------------
+Running the development engine
+------------------------------
 
-(melkenv)$ cd melkman/scripts
-(melkenv)$ python ./monobrain.py ../dev.yaml
-...
+The development engine ("monobrain") runs all of the engine's services in one
+monolithic process::
+
+    (melkenv)$ cd melkman/scripts
+    (melkenv)$ python ./monobrain.py ../dev.yaml
+    ...
 
 
+---------------------------
 Interacting with the engine
 ---------------------------
-Basically this means a python prompt atm :/ 
 
-(melkenv)$ cd melkman/scripts
-(melkenv)$ python ./shell.py ../dev.yaml
+Basically this means a python prompt at the moment::
 
-Melkman Interactive Shell
-...
-You may access the current context as "ctx"
+    (melkenv)$ cd melkman/scripts
+    (melkenv)$ python ./shell.py ../dev.yaml
 
->>> url = "http://rss.slashdot.org/Slashdot/slashdot"
+    Melkman Interactive Shell
+    ...
+    You may access the current context as "ctx"
 
->>> from melkman.fetch import request_feed_index
->>> request_feed_index(url, ctx)
 
->>> from melkman.db import RemoteFeed
->>> slashdot = RemoteFeed.get_by_url(url, ctx)
+ First let's start indexing a feed::
 
->>> slashdot.entries.values()[0].title
-u"Something disastrous is happening to the internets"
+    >>> url = "http://rss.slashdot.org/Slashdot/slashdot"
 
-Creating an aggregation
------------------------
+    >>> from melkman.fetch import request_feed_index
+    >>> request_feed_index(url, ctx)
 
->>> from melkman.db import Composite
->>> my_feeds = Composite.create(ctx)
->>> my_feeds.subscribe(slashdot)
->>> my_feeds.save()
+    >>> from melkman.db import RemoteFeed
+    >>> slashdot = RemoteFeed.get_by_url(url, ctx)
 
->>> my_feeds = Composite.get(my_feeds.id, ctx)
->>> my_feeds.entries.values()[0].title
-u"Something disastrous is happening to the internets"
+    >>> slashdot.entries.values()[0].title
+    u"Something disastrous is happening to the internets"
 
->>> url = "http://www.nytimes.com/services/xml/rss/nyt/HomePage.xml" 
->>> nytimes = RemoteFeed.create_from_url(url, ctx)
->>> nytimes.save()
->>> my_feeds.subscribe(nytimes)
->>> my_feeds.save()
+Now let's create a composite, an aggregation of one or more sources::
 
->>> my_feeds = Composite.get(my_feeds.id, ctx)
->>> my_feeds.entries.values()[0].title
-u"Something disastrous is happening to the earths"
+    >>> from melkman.db import Composite
+    >>> my_feeds = Composite.create(ctx)
+    >>> my_feeds.subscribe(slashdot)
+    >>> my_feeds.save()
+
+    >>> my_feeds = Composite.get(my_feeds.id, ctx)
+    >>> my_feeds.entries.values()[0].title
+    u"Something disastrous is happening to the internets"
+
+    >>> url = "http://www.nytimes.com/services/xml/rss/nyt/HomePage.xml" 
+    >>> nytimes = RemoteFeed.create_from_url(url, ctx)
+    >>> nytimes.save()
+    >>> my_feeds.subscribe(nytimes)
+    >>> my_feeds.save()
+
+    >>> my_feeds = Composite.get(my_feeds.id, ctx)
+    >>> my_feeds.entries.values()[0].title
+    u"Something disastrous is happening to the earths"
