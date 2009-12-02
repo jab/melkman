@@ -125,6 +125,12 @@ class NewsBucket(DocumentHelper):
 
     last_modification_date = DateTimeField()
     creation_date = DateTimeField(default=datetime.utcnow)
+    maxlen = IntegerField()
+    """
+    The maxlen field in the document is kept in sync with the underlying
+    nldict's maxlen via the ``set_maxlen`` mutator.
+    A value of None means no limit.
+    """
 
     def __init__(self, *args, **kw):
         if not args and not 'id' in kw:
@@ -135,22 +141,21 @@ class NewsBucket(DocumentHelper):
         self._entries = None # lazy load
         self._removed = {}
         self._updated = {}
-        self._maxlen = kw.get('maxlen')
 
     def __len__(self):
         return len(self.entries)
 
-    def _maxlen_get(self):
-        return self._maxlen
-
-    def _maxlen_set(self, value):
-        if self._maxlen == value:
+    def set_maxlen(self, value):
+        if self._entries.maxlen == value:
             return
-        self._maxlen = value
+        if not (value is None or (isinstance(value, int) and value > 0)):
+            raise ValueError(
+                'maxlen must be either None or at least 1, got %r' % value)
+        self.maxlen = value
         if self._entries is not None:
+            # if the new maxlen is less than len(self._entries)
+            # this will cause old items to be removed:
             self._entries.maxlen = value
-
-    maxlen = property(_maxlen_get, _maxlen_set)
 
     @classmethod
     def create(cls, context, *args, **kw):
@@ -163,7 +168,7 @@ class NewsBucket(DocumentHelper):
         @wraps(method, ('__name__', '__doc__'))
         def wrapper(self, *args, **kwds):
             if force or self._entries is None:
-                self._entries = nldict(self._maxlen, SORTKEY)
+                self._entries = nldict(self.maxlen, SORTKEY)
                 self._entries.observers.append(self)
                 
                 # saved in db

@@ -300,15 +300,17 @@ def test_bucket_maxlen():
     """
     Test that bucket with maxlen behaves as expected
     """
-    from melkman.db.bucket import NewsBucket, NewsItemRef
+    from melkman.db.bucket import NewsBucket, NewsItemRef, SORTKEY
     from datetime import datetime, timedelta
     from operator import attrgetter
     ctx = fresh_context()
     
-    # add 10 items spaced an hour apart to a bucket of max-length 3
+    # add 10 items spaced an hour apart to a bucket of max-length 3:
+
     maxlen = 3
-    sortkey = attrgetter('timestamp')
-    bucket = NewsBucket.create(ctx, maxlen=maxlen, sortkey=sortkey)
+    sortkey = SORTKEY # for now this is hardcoded in melkman.db.bucket
+    bucket = NewsBucket.create(ctx, maxlen=maxlen)
+    assert bucket.maxlen == maxlen
     items = []
     timestamp = datetime.utcnow()
     for i in xrange(10):
@@ -320,7 +322,7 @@ def test_bucket_maxlen():
         bucket.add_news_item(item)
 
     # make sure the bucket has only the maxlen latest items
-    # before and after saving
+    # before and after saving:
 
     idgetter = attrgetter('item_id')
     sorteditemsids = map(idgetter, sorted(items, key=sortkey))
@@ -335,51 +337,76 @@ def test_bucket_maxlen():
 
         assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
         bucket.save()
-
-        # XXX this throws away maxlen and sortkey! persist them?
-        maxlen = bucket.maxlen
         bucket = NewsBucket.get(bucket.id, ctx)
-        bucket.maxlen = maxlen
-        bucket._sortkey = sortkey
-
         assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
-
         return bucket
 
     bucket = check_before_and_after_save(bucket)
 
-    # decrease maxlen and make sure bucket.entries remains consistent
+    # decrease maxlen and make sure bucket.entries remains consistent:
     maxlen -= 1
-    bucket.maxlen = maxlen
+    bucket.set_maxlen(maxlen)
     bucket = check_before_and_after_save(bucket)
 
-    # now increase maxlen so that the bucket is under capacity and check consistency
+    # now increase maxlen so that the bucket is under capacity and check consistency:
     maxlen += 2
-    bucket.maxlen = maxlen
+    bucket.set_maxlen(maxlen)
     bucket = check_before_and_after_save(bucket)
 
-    # fill to capacity and check that the new maxlen is maintained
+    # fill to capacity and check that the new maxlen is maintained:
     for i in items:
         bucket.add_news_item(i)
-
     bucket = check_before_and_after_save(bucket)
 
-    # now set the maxlen to None to make an unbounded bucket, add items and
-    # check that they're all accommodated
-    bucket.maxlen = None
+    # now set the maxlen to None and make sure it becomes an unbounded bucket:
+    maxlen = None
+    bucket.set_maxlen(maxlen)
     for i in items:
         bucket.add_news_item(i)
-
     bucket = check_before_and_after_save(bucket)
 
 
-    # if you add something to bucket._entries directly rather than going
-    # through the interface, make sure it's there after saving
-    bucket.clear()
-    bucket.save()
+def test_direct_entries_access():
+    """
+    if you add something to bucket.entries directly rather than going
+    through the interface, make sure it's there after saving (i.e. NewsBucket
+    is properly observing changes to the underlying nldict)
+    """
+    from melkman.db.bucket import NewsBucket, NewsItemRef
+    ctx = fresh_context()
+
+    bucket = NewsBucket.create(ctx)
     assert len(bucket) == 0
-    item = items[0]
-    bucket.entries[item.item_id] = item
-    assert bucket.has_news_item(item)
+    item1 = NewsItemRef.create_from_info(ctx, bucket.id, item_id=random_id())
+    item2 = NewsItemRef.create_from_info(ctx, bucket.id, item_id=random_id())
+    bucket.entries[item1.item_id] = item1
+    bucket.entries[item2.item_id] = item2
+    assert len(bucket) == 2
+    assert bucket.has_news_item(item1)
+    assert bucket.has_news_item(item2)
     bucket.save()
-    assert bucket.has_news_item(item)
+    bucket = NewsBucket.get(bucket.id, ctx)
+    assert len(bucket) == 2
+    assert bucket.has_news_item(item1)
+    assert bucket.has_news_item(item2)
+
+    # directly changing the maxlen of the underlying nldict instead of using
+    # NewsBucket.set_maxlen is *not* supported:
+    bucket.entries.maxlen = 1  # causes items to be deleted in memory:
+    assert len(bucket.entries) == 1
+    # but the document's maxlen field is not updated:
+    assert bucket.maxlen is None
+    # so after re-retrieving the document the nldict's maxlen is the old value
+    bucket = NewsBucket.get(bucket.id, ctx)
+    assert bucket.entries.maxlen is None
+    assert len(bucket) == 2 # and the bucket still has two items
+
+    # if we save after changing the nldict's maxlen...
+    bucket.entries.maxlen = 1  # items deleted in memory
+    assert len(bucket.entries) == 1
+    bucket.save()
+    # ...items are now deleted from persistent storage!
+    bucket = NewsBucket.get(bucket.id, ctx)
+    assert len(bucket) == 1
+    # but the maxlen field on the document was still never set
+    assert bucket.maxlen == None
