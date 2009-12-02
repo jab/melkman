@@ -1,8 +1,9 @@
 Overview
 ========
 
-Melkman is a feed aggregating, sorting and filtering engine based on CouchDB,
-RabbitMQ and eventlet.
+Melkman is a feed aggregating, sorting, and filtering engine based on `CouchDB
+<http://couchdb.apache.org/>`_, `RabbitMQ <http://www.rabbitmq.com/>`_, and
+`eventlet <http://eventlet.net>`.
 
 This is mostly a pre-alpha work-in-progress at the moment.
 
@@ -10,26 +11,34 @@ This is mostly a pre-alpha work-in-progress at the moment.
 Requirements
 ============
 
-- `Python <http://www.python.org/>`_
-- `CouchDB <http://couchdb.apache.org/>`_
-- `RabbitMQ <http://www.rabbitmq.com/>`_
+- `Python <http://www.python.org/>`_ 2.5 or 2.6
+- `CouchDB <http://couchdb.apache.org/>`_ 0.9 or higher
+- `RabbitMQ <http://www.rabbitmq.com/>`_ 1.6 or higher
 
 
 Installation
 ============
 
 It is recommended that you install melkman into a virtualenv. So if you have
-not already, first install virtualenv and pip::
+not already, first install `virtualenv <http://virtualenv.openplans.org/>`_
+version 1.4.3 or higher (comes with `pip <http://pip.openplans.org/>`_),
+either via your system's package manager::
 
-    $ easy_install virtualenv
-    ...
-    $ easy_install pip
-    ...
+    $ sudo port install py26-virtualenv
 
-Great, now install melkman and dependencies into a new env::
+or via `distribute
+<http://pypi.python.org/pypi/distribute>`_ / `setuptools
+<http://pypi.python.org/pypi/setuptools>`_::
+
+    $ sudo easy_install virtualenv
+
+Now install melkman and its dependencies into a new virtualenv::
 
     $ virtualenv melkenv
-    $ pip -E melkenv install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
+    ...
+    $ cd melkenv
+    $ source bin/activate
+    (melkenv)$ pip install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
     ...
 
 This will install melkman as an editable package in melkenv/src/melkman.
@@ -47,27 +56,29 @@ Make sure sure couchdb and rabbitmq are running before doing the following:
 Set up rabbitmq users / virtual hosts 
 -------------------------------------
 
-A few rabbit specific commands need to be run to 
-set things up.  If you adjust the defaults, 
-be sure to also change your configuration yaml 
-file to reflect the changes as well as 
-tests/test.yaml::
+A few rabbit specific commands need to be run to set things up::
 
-    $ cd melkman/scripts
-    $ sudo ./setup_rabbit.sh
+    $ sudo melkman/scripts/setup_rabbit.sh
     ...
 
+If you adjust the defaults, be sure to also change your dev.yaml configuration
+file as well as tests/test.yaml to reflect the changes.
 
 -------------
 Running tests
 -------------
 
-If you don't have nose, run ``easy_install nose`` inside your virtualenv.
-Then::
+Running the tests requires `nose
+<http://somethingaboutorange.com/mrl/projects/nose/`_. (Run ``easy_install
+nose`` inside your virtualenv to install.) Then::
 
     (melkenv)$ cd melkman/tests
     (melkenv)$ nosetests -s
-    .........................
+    ................................................
+    ----------------------------------------------------------------------
+    Ran ... tests in ...s
+
+    OK
 
 
 ------------------------------
@@ -82,8 +93,7 @@ yaml. The package contains some sensible defaults::
     (melkenv)$ python ./bootstrap.py ../dev.yaml
     ...
 
-Now you're ready to start doing something. Hooray!
-
+Now you're ready to start doing something, hooray!
 
 
 Doing Something
