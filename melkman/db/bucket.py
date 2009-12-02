@@ -22,21 +22,20 @@ from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
 from functools import wraps
-import logging
 from melk.util.nldict import nldict
 from melk.util.nonce import nonce_str
 from melk.util.hash import melk_id
-
 from melkman.db.util import DocumentHelper, MappingField, DibjectField
 from melkman.aggregator.api import notify_bucket_modified
+from operator import attrgetter
+import logging
+log = logging.getLogger(__name__)
 
 __all__ = ['NewsItem', 'NewsBucket',
            'immediate_add',
            'view_entries',
            'view_entries_by_timestamp',
            'view_entries_by_add_time']
-
-log = logging.getLogger(__name__)
 
 
 class NewsItem(DocumentHelper):
@@ -115,6 +114,7 @@ class NewsItemRef(DocumentHelper):
         return '%s_%s' % (bucket_id, item_id)
 
 
+SORTKEY = attrgetter('timestamp')
 class NewsBucket(DocumentHelper):
 
     document_types = ListField(TextField(), default=['NewsBucket'])
@@ -135,7 +135,6 @@ class NewsBucket(DocumentHelper):
         self._removed = {}
         self._updated = {}
         self._maxlen = kw.get('maxlen')
-        self._sortkey = kw.get('sortkey')
 
     def __len__(self):
         return len(self.entries)
@@ -163,7 +162,7 @@ class NewsBucket(DocumentHelper):
         @wraps(method, ('__name__', '__doc__'))
         def wrapper(self, *args, **kwds):
             if force or self._entries is None:
-                self._entries = nldict(self._maxlen, self._sortkey)
+                self._entries = nldict(self._maxlen, SORTKEY)
                 self._entries.observers.append(self)
                 
                 # saved in db
@@ -320,7 +319,8 @@ class NewsBucket(DocumentHelper):
             self._entries = None
 
         if not main_doc_saved:
-            raise Exception(main_doc_result)
+            assert isinstance(main_doc_result, ResourceConflict)
+            raise main_doc_result
 
 
     def _send_modified_event(self, *args, **kw):
