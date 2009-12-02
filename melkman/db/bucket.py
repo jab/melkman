@@ -114,6 +114,7 @@ class NewsItemRef(DocumentHelper):
         return '%s_%s' % (bucket_id, item_id)
 
 
+# XXX sortkey is hardcoded for now, can generalize later if necessary
 SORTKEY = attrgetter('timestamp')
 class NewsBucket(DocumentHelper):
 
