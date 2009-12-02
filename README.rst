@@ -67,7 +67,7 @@ Running tests
 -------------
 
 Running the tests requires `nose
-<http://somethingaboutorange.com/mrl/projects/nose/`_. (Run ``easy_install
+<http://somethingaboutorange.com/mrl/projects/nose/>`_. (Run ``easy_install
 nose`` inside your virtualenv to install.) Then::
 
     (melkenv)$ cd melkman/tests
