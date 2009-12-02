@@ -52,7 +52,6 @@ some ways to poke around...
 
 Make sure sure couchdb and rabbitmq are running before doing the following:
 
--------------------------------------
 Set up rabbitmq users / virtual hosts 
 -------------------------------------
 
@@ -64,7 +63,6 @@ A few rabbit specific commands need to be run to set things up::
 If you adjust the defaults, be sure to also change your dev.yaml configuration
 file as well as tests/test.yaml to reflect the changes.
 
--------------
 Running tests
 -------------
 
@@ -81,7 +79,6 @@ nose`` inside your virtualenv to install.) Then::
     OK
 
 
-------------------------------
 Bootstrap database and plugins
 ------------------------------
 
@@ -99,7 +96,6 @@ Now you're ready to start doing something, hooray!
 Doing Something
 ===============
 
-------------------------------
 Running the development engine
 ------------------------------
 
@@ -111,11 +107,11 @@ monolithic process::
     ...
 
 
----------------------------
 Interacting with the engine
 ---------------------------
 
-Basically this means a python prompt at the moment::
+Basically this means a python prompt at the moment (though you can also try
+an `experimental frontend <http://github.com/jab/beereader>`_)::
 
     (melkenv)$ cd melkman/scripts
     (melkenv)$ python ./shell.py ../dev.yaml
