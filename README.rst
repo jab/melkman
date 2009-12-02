@@ -3,7 +3,7 @@ Overview
 
 Melkman is a feed aggregating, sorting, and filtering engine based on `CouchDB
 <http://couchdb.apache.org/>`_, `RabbitMQ <http://www.rabbitmq.com/>`_, and
-`eventlet <http://eventlet.net>`.
+`eventlet <http://eventlet.net>`_.
 
 This is mostly a pre-alpha work-in-progress at the moment.
 
