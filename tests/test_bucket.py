@@ -367,14 +367,12 @@ def test_bucket_maxlen():
 
 
 def test_direct_entries_access():
-    """
-    if you add something to bucket.entries directly rather than going
-    through the interface, make sure it's there after saving (i.e. NewsBucket
-    is properly observing changes to the underlying nldict)
-    """
     from melkman.db.bucket import NewsBucket, NewsItemRef
     ctx = fresh_context()
 
+    # if you add something to bucket.entries directly rather than going
+    # through the interface, make sure it's there after saving (i.e. NewsBucket
+    # is properly observing changes to the underlying nldict)
     bucket = NewsBucket.create(ctx)
     assert len(bucket) == 0
     item1 = NewsItemRef.create_from_info(ctx, bucket.id, item_id=random_id())
