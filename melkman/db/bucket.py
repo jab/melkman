@@ -142,9 +142,6 @@ class NewsBucket(DocumentHelper):
         self._removed = {}
         self._updated = {}
 
-    def __len__(self):
-        return len(self.entries)
-
     def set_maxlen(self, value):
         if self._entries.maxlen == value:
             return
