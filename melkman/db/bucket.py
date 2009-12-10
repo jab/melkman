@@ -325,7 +325,7 @@ class NewsBucket(DocumentHelper):
             self._entries = None
 
         if not main_doc_saved:
-            assert isinstance(main_doc_result, ResourceConflict)
+            assert isinstance(main_doc_result, Exception)
             raise main_doc_result
 
 
