@@ -21,12 +21,15 @@ from couchdb import ResourceConflict
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
 from datetime import datetime
-import logging
+from functools import wraps
+from melk.util.nldict import nldict
 from melk.util.nonce import nonce_str
 from melk.util.hash import melk_id
-
 from melkman.db.util import DocumentHelper, MappingField, DibjectField
 from melkman.aggregator.api import notify_bucket_modified
+from operator import attrgetter
+import logging
+log = logging.getLogger(__name__)
 
 __all__ = ['NewsItem', 'NewsBucket',
            'immediate_add',
@@ -34,7 +37,6 @@ __all__ = ['NewsItem', 'NewsBucket',
            'view_entries_by_timestamp',
            'view_entries_by_add_time']
 
-log = logging.getLogger(__name__)
 
 class NewsItem(DocumentHelper):
 
@@ -44,7 +46,7 @@ class NewsItem(DocumentHelper):
     def item_id(self):
         return self.id
 
-    timestamp = DateTimeField(default=datetime.utcnow())
+    timestamp = DateTimeField(default=datetime.utcnow)
     title = TextField()
     author = TextField()
     link = TextField()
@@ -69,8 +71,8 @@ class NewsItemRef(DocumentHelper):
 
     item_id = TextField()
     bucket_id = TextField()
-    timestamp = DateTimeField(default=datetime.utcnow())
-    add_time = DateTimeField(default=datetime.utcnow())
+    timestamp = DateTimeField(default=datetime.utcnow)
+    add_time = DateTimeField(default=datetime.utcnow)
     title = TextField()
     author = TextField()
     link = TextField()
@@ -111,6 +113,9 @@ class NewsItemRef(DocumentHelper):
     def dbid(cls, bucket_id, item_id):
         return '%s_%s' % (bucket_id, item_id)
 
+
+# XXX sortkey is hardcoded for now, can generalize later if necessary
+SORTKEY = attrgetter('timestamp')
 class NewsBucket(DocumentHelper):
 
     document_types = ListField(TextField(), default=['NewsBucket'])
@@ -120,9 +125,15 @@ class NewsBucket(DocumentHelper):
 
     last_modification_date = DateTimeField()
     creation_date = DateTimeField(default=datetime.utcnow)
+    maxlen = IntegerField()
+    """
+    The maxlen field in the document is kept in sync with the underlying
+    nldict's maxlen via the ``set_maxlen`` mutator.
+    A value of None means no limit.
+    """
 
     def __init__(self, *args, **kw):
-        if len(args) == 0 and not 'id' in kw:
+        if not args and not 'id' in kw:
             log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         
@@ -131,40 +142,71 @@ class NewsBucket(DocumentHelper):
         self._removed = {}
         self._updated = {}
 
+    def __len__(self):
+        return len(self.entries)
+
+    def set_maxlen(self, value):
+        if self._entries.maxlen == value:
+            return
+        if not (value is None or (isinstance(value, int) and value > 0)):
+            raise ValueError(
+                'maxlen must be either None or at least 1, got %r' % value)
+        self.maxlen = value
+        if self._entries is not None:
+            # if the new maxlen is less than len(self._entries)
+            # this will cause old items to be removed:
+            self._entries.maxlen = value
+
     @classmethod
     def create(cls, context, *args, **kw):
-        if len(args) == 0 and not 'id' in kw:
+        if not args and not 'id' in kw:
             log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         return super(NewsBucket, cls).create(context, *args, **kw)
 
+    def _lazy_load_entries(method, force=False):
+        @wraps(method, ('__name__', '__doc__'))
+        def wrapper(self, *args, **kwds):
+            if force or self._entries is None:
+                self._entries = nldict(self.maxlen, SORTKEY)
+                self._entries.observers.append(self)
+                
+                # saved in db
+                if not (self.id is None or self.rev is None):
+                    query = {
+                        'startkey': self.id,
+                        'endkey': self.id + '0',
+                        'include_docs': True,
+                    }
+                    for r in view_entries(self._context.db, **query):
+                        ref = NewsItemRef.from_doc(r.doc, self._context)
+                        self._entries[ref.item_id] = ref
+
+            return method(self, *args, **kwds)
+
+        return wrapper
+
     @property
+    @_lazy_load_entries
     def entries(self):
-        self._lazy_load_entries()
         return self._entries
 
-    def _lazy_load_entries(self):
-        if self._entries is not None:
-            return
-        
-        self._entries = {}
-        
-        # not saved in db.
-        if self.id is None or self.rev is None:
-            return
+    def mapping_set(self, map, key, val):
+        """
+        Callback invoked when a mapping in self._entries is set.
+        """
+        assert map is self._entries
+        self._updated_item(val)
 
-        query = {
-            'startkey': self.id,
-            'endkey': self.id + '0',
-            'include_docs': True,
-        }
-        for r in view_entries(self._context.db, **query):
-            ref = NewsItemRef.from_doc(r.doc, self._context)
-            self._entries[ref.item_id] = ref
+    def mapping_deleted(self, map, key, val):
+        """
+        Callback invoked when a mapping in self._entries is deleted.
+        """
+        assert map is self._entries
+        self._removed_item(val)
 
+    @_lazy_load_entries
     def add_news_item(self, item):
-        self._lazy_load_entries()
-
         if isinstance(item, basestring):
             item = NewsItemRef.create_from_info(self._context, self.id, item_id=item)
         elif isinstance(item, NewsItem) or isinstance(item, NewsItemRef):
@@ -180,70 +222,56 @@ class NewsBucket(DocumentHelper):
             current_item = self._entries[item.item_id]
             if item.timestamp is None or item.timestamp <= current_item.timestamp:
                 return False
-            else:
-                current_item.update_from(item)
-                self._updated_item(current_item)
-                return True
-
-        # if it's currently in the trash, we remove it from 
-        # the trash and unconditionally update it
-        elif item.item_id in self._removed:
-            current_item = self._removed[item.item_id]
             current_item.update_from(item)
-            self._entries[item.item_id] = current_item
             self._updated_item(current_item)
             return True
 
-        # a new item
-        else:
-            self._entries[item.item_id] = item
-            self._updated_item(item)
+        # if it's currently in the trash, we remove it from 
+        # the trash and unconditionally update it
+        if item.item_id in self._removed:
+            current_item = self._removed[item.item_id]
+            current_item.update_from(item)
+            self._entries[item.item_id] = current_item
             return True
 
+        # a new item
+        self._entries[item.item_id] = item
+        return True
+
+    @_lazy_load_entries
     def remove_news_item(self, item):
-        self._lazy_load_entries()
         try:
             if isinstance(item, basestring):
-                self._removed_item(self._entries[item])
                 del self._entries[item]
                 return True
-            elif hasattr(item_id, 'item_id'):
-                self._removed_item(self._entries[item.item_id])
+            if hasattr(item, 'item_id'):
                 del self._entries[item.item_id]
                 return True
-            else:
-                return False
+            return False
         except KeyError:
             return False
 
+    @_lazy_load_entries
     def has_news_item(self, item):
-        self._lazy_load_entries()
-
         if isinstance(item, basestring):
             return item in self._entries
-        elif hasattr(item, 'item_id'):
+        if hasattr(item, 'item_id'):
             return item.item_id in self._entries
-        else:
-            return False
+        return False
 
+    @_lazy_load_entries
     def filter_entries(self, predicate):
-        self._lazy_load_entries()
-        
         kill_keys = []
         for (k, v) in self._entries.iteritems():
             if not predicate(v):
                 kill_keys.append(k)
         for k in kill_keys:
-            self._removed_item(self._entries[k])
             del self._entries[k]
-
         return kill_keys
 
+    @_lazy_load_entries
     def clear(self):
-        self._lazy_load_entries()
-        for item in self._entries.values():
-            self._removed_item(item)
-        self._entries = {}
+        self._entries.clear()
 
     def save(self):
         self.last_modification_date = datetime.utcnow()
@@ -284,9 +312,9 @@ class NewsBucket(DocumentHelper):
                 conflicts = True
         
         kw = {}
-        if len(successful_updates) > 0:
+        if successful_updates:
             kw['updated_items'] = [x.unwrap() for x in successful_updates]
-        if len(successful_deletes) > 0:
+        if successful_deletes:
             kw['removed_items'] = [x.unwrap() for x in successful_deletes]
         self._send_modified_event(**kw)
         self._updated = {}
@@ -297,6 +325,7 @@ class NewsBucket(DocumentHelper):
             self._entries = None
 
         if not main_doc_saved:
+            assert isinstance(main_doc_result, ResourceConflict)
             raise main_doc_result
 
 
@@ -312,14 +341,14 @@ class NewsBucket(DocumentHelper):
 
     def _removed_item(self, item):
         updated = self._updated.get(item.item_id, None)
-        if updated is None:
-            self._removed[item.item_id] = item
-        else:
+        if updated is not None:
             del self._updated[item.item_id]
             # only keep previously saved items in the
             # removed list.
             if updated.rev is not None:
                 self._removed[item.item_id] = item
+        else:
+            self._removed[item.item_id] = item
     
     def _clobber(self, item):
         if self._entries is not None:
@@ -337,11 +366,10 @@ class NewsBucket(DocumentHelper):
 
     def delete(self):
         dels = [{'_id': self.id, '_rev': self.rev, '_deleted': True}]
-        self._entries = None
-        self._lazy_load_entries()
         for e in self._entries.values():
             dels.append({'_id': e.id, '_rev': e.rev, '_deleted': True})
         self._context.db.update(dels)
+    delete = _lazy_load_entries(delete, force=True)
 
 
 def immediate_add(bucket, item, context, notify=True):
@@ -374,7 +402,7 @@ def immediate_add(bucket, item, context, notify=True):
         current_item.save()
         bucket._clobber(current_item)        
         
-        if notify == True:
+        if notify:
             notify_bucket_modified(bucket, context, updated_items=[current_item.unwrap()])
 
         return True

@@ -1,5 +1,28 @@
 from helpers import *
 
+def test_get_by_ids():
+    from couchdb.schema import IntegerField
+    from melkman.db.util import DocumentHelper
+
+    ctx = fresh_context()
+
+    class Foo(DocumentHelper):
+        i = IntegerField()
+        @classmethod
+        def from_doc(cls, doc, ctx):
+            instance = super(Foo, cls).from_doc(doc, ctx)
+            instance.flag = True
+            return instance
+
+    foo1 = Foo.create(ctx, i=1)
+    foo1.save()
+    foo2 = Foo.create(ctx, i=2)
+    foo2.save()
+
+    foo1, foo2 = Foo.get_by_ids((foo1.id, foo2.id), ctx)
+    assert foo1.i == 1 and foo2.i == 2
+    assert foo1.flag and foo2.flag
+
 def test_db_util_doctest():
     import doctest
     from melkman.db import util
