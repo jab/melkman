@@ -11,7 +11,7 @@ This is mostly a pre-alpha work-in-progress at the moment.
 Requirements
 ============
 
-- `Python <http://www.python.org/>`_ 2.5 or 2.6
+- `Python <http://www.python.org/>`_ 2.6
 - `CouchDB <http://couchdb.apache.org/>`_ 0.9 or higher
 - `RabbitMQ <http://www.rabbitmq.com/>`_ 1.6 or higher
 
