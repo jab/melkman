@@ -42,7 +42,7 @@ class GreenContext(Context):
         Context.close(self)
         # XXX fix this better...
         try:
-            del self._local.__dict__['__objs'][get_ident()]
+            del object.__getattribute__(self._local, '__dict__').setdefault('__objs', {})[get_ident()]
         except KeyError:
             pass
 
