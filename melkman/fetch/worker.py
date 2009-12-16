@@ -8,6 +8,8 @@ import traceback
 from melkman.db import RemoteFeed
 from melkman.fetch.api import schedule_feed_index, FeedIndexerConsumer
 from melkman.fetch.api import PostIndexAction, IndexRequestFilter
+from melkman.green import resilient_consumer_loop
+from melkman.worker import IWorkerProcess
 
 __all__ = ['FeedIndexer', 'index_feed_polling']
 
@@ -215,3 +217,10 @@ class FeedIndexer(FeedIndexerConsumer):
             index_feed_push(url, content, self.context, request_info=message_data)
         except:
             log.error("Error pushing %s: %s" % (message_data, traceback.format_exc()))
+
+
+class FeedIndexerProcess(Component):
+    implements(IWorkerProcess)
+    
+    def run(self, context):
+        resilient_consumer_loop(FeedIndexer, context)

@@ -5,11 +5,13 @@ from datetime import datetime, timedelta
 from eventlet.api import sleep
 from eventlet.coros import event
 from eventlet.proc import spawn as spawn_proc, waitall
+from giblets import Component, implements
 import logging 
 import traceback
 
 from melkman.green import resilient_consumer_loop, timeout_wait
 from melkman.scheduler.api import SchedulerConsumer, DeliveryOptions, DeferredAMQPMessage, view_deferred_messages_by_timestamp
+from melkman.worker import IWorkerProcess
 
 log = logging.getLogger(__name__)
 
@@ -319,3 +321,10 @@ class ScheduledMessageService(object):
         if unclaim_count > 0:
             log.warn('Cleanup unclaimed %d items' % unclaim_count)
 
+
+class ScheduleMessageServiceProcess(Component):
+    implements(IWorkerProcess)
+
+    def run(self, context):
+        sms = ScheduledMessageService(context)
+        sms.run()

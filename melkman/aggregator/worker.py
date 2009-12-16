@@ -1,6 +1,8 @@
 from copy import deepcopy
 from couchdb import ResourceConflict, ResourceNotFound
 from eventlet.api import spawn, sleep
+from eventlet.proc import spawn as spawn_proc, waitall
+from giblets import Component, implements
 import logging
 import traceback
 
@@ -9,7 +11,9 @@ from melkman.db.composite import Composite, view_composites_by_subscription
 from melkman.db.remotefeed import RemoteFeed
 from melkman.db.util import batched_view_iter
 from melkman.fetch.api import request_feed_index
+from melkman.green import resilient_consumer_loop
 from melkman.aggregator.api import *
+from melkman.worker import IWorkerProcess
 
 log = logging.getLogger(__name__)
 
@@ -223,3 +227,15 @@ class CompositeUpdater(SubscriptionUpdateConsumer):
         finally:
             message.ack()
             self.context.close()
+
+
+class AggregatorProcess(Component):
+    implements(IWorkerProcess)
+
+    def run(self, context):
+        procs = []
+        updater = spawn_proc(resilient_consumer_loop, CompositeUpdater, context)
+        dispatcher = spawn_proc(resilient_consumer_loop, CompositeUpdateDispatcher, context)
+        procs.append(updater)
+        procs.append(dispatcher)
+        waitall(procs)
