@@ -18,6 +18,7 @@ from melkman.db.util import backoff_save
 from melkman.fetch.api import push_feed_index
 from melkman.fetch.api import IndexRequestFilter
 from melkman.fetch.api import PostIndexAction
+from melkman.worker import IWorkerProcess
 from melk.util.nonce import nonce_str
 
 log = logging.getLogger(__name__)
@@ -179,6 +180,13 @@ class WSGISubClient(object):
         digest = req.headers.get('X-Hub-Signature', None)
         content = req.body
         push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
+
+class WSGISubClientProcess(Component):
+    implements(IWorkerProcess)
+    
+    def run(self, context):
+        w = WSGISubClient(context)
+        w.run()
 
 class HubAutosubscriber(Component):
     implements(PostIndexAction, IContextConfigurable)
