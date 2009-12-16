@@ -86,8 +86,7 @@ To create the necessary databases, views, and rabbit queues, you can run
 the bootstrap operation on the current setup defined in your configuration
 yaml. The package contains some sensible defaults::
 
-    (melkenv)$ cd melkman/scripts
-    (melkenv)$ python ./bootstrap.py ../dev.yaml
+    (melkenv)$ melkman bootstrap ../dev.yaml
     ...
 
 Now you're ready to start doing something, hooray!
@@ -99,11 +98,10 @@ Doing Something
 Running the development engine
 ------------------------------
 
-The development engine ("monobrain") runs all of the engine's services in one
+The development engine runs all of the engine's services in one
 monolithic process::
 
-    (melkenv)$ cd melkman/scripts
-    (melkenv)$ python ./monobrain.py ../dev.yaml
+    (melkenv)$ melkman serve ../dev.yaml
     ...
 
 
@@ -113,8 +111,7 @@ Interacting with the engine
 Basically this means a python prompt at the moment (though you can also try
 an `experimental frontend <http://github.com/jab/beereader>`_)::
 
-    (melkenv)$ cd melkman/scripts
-    (melkenv)$ python ./shell.py ../dev.yaml
+    (melkenv)$ melkman shell ../dev.yaml
 
     Melkman Interactive Shell
     ...
