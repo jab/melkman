@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 class CompositeUpdateDispatcher(CompositeDispatchConsumer):
     """
-    SubscriptionDispatchConsumer translates
+    CompositeDispatchConsumer translates
     bucket_modified messages into subscription 
     update messages on subscribed composites.
     """
