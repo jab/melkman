@@ -37,7 +37,7 @@ setup(
                       'eventlet>=0.9',
                       'giblets',
                       'greenamqp',
-                      'httplib2<0.5',
+                      'httplib2',
                       'melk.util',
                       'simplejson',
                       'PyYAML',
