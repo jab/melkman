@@ -20,6 +20,7 @@
 import cgi
 from copy import deepcopy
 from datetime import datetime
+from hashlib import md5
 import feedparser
 import re
 
