@@ -1,8 +1,12 @@
 from carrot.messaging import Publisher, Consumer
 from eventlet.coros import event
 from eventlet.proc import spawn, waitall
+import logging
+import traceback
 from uuid import uuid1
-from melkman.green import resilient_consumer_loop
+from melkman.green import consumer_loop
+
+log = logging.getLogger(__name__)
 
 def exchange_for_channel(channel):
     return 'eventbus.%s' % channel
@@ -48,7 +52,11 @@ class EventBus(object):
             consumer, proc = self._start_consumer(channel)
             self._procs[channel] = proc
         def cb(message_data, message):
-            callback(message_data)
+            try:
+                callback(message_data)
+            except:
+                log.error("Unhandled exception in event callback for channel %s: %s" % (channel, traceback.format_exc()))
+
         consumer.register_callback(cb)
 
     def _start_consumer(self, channel):
@@ -59,7 +67,7 @@ class EventBus(object):
             if not ready.has_result():
                 ready.send(consumer)
             return consumer
-        proc = spawn(resilient_consumer_loop, make_consumer, self.context)
+        proc = spawn(consumer_loop, make_consumer, self.context)
         consumer = ready.wait()
         return consumer, proc
 
