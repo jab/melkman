@@ -56,7 +56,7 @@ def main():
     command = all_commands.lookup(command_name)
     
     if command is None:
-        print_usage('uknown command: %s' % command_name)
+        print_usage('unknown command: %s' % command_name)
         sys.exit(0)
 
     def user_trap(*args, **kw):
