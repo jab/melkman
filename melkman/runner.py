@@ -2,6 +2,7 @@ from giblets import Attribute, Component, ExtensionInterface, ExtensionPoint, im
 from melkman.green import green_init
 green_init()    
 import optparse
+import signal
 import sys
 
 def print_usage(message=None):
@@ -50,12 +51,17 @@ def main():
     logging.basicConfig(level=logging.INFO)
     context = GreenContext.from_yaml(yaml_file)
 
+
     all_commands = AvailableCommands(context.component_manager)
     command = all_commands.lookup(command_name)
     
-    if command_name is None:
-        print_usage('uknown command')
+    if command is None:
+        print_usage('uknown command: %s' % command_name)
         sys.exit(0)
+
+    def user_trap(*args, **kw):
+        cmd = all_commands.lookup('shell')(context, [])
+    signal.signal(signal.SIGUSR1, user_trap)
 
 
     return command(context, sys.argv[2:-1])
