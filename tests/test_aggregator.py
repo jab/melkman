@@ -8,15 +8,13 @@ log = logging.getLogger(__name__)
 def test_modified_updates_composite():
     from eventlet.api import sleep
     from eventlet.proc import spawn, waitall
-    from melkman.aggregator.worker import CompositeUpdater, CompositeUpdateDispatcher
+    from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
     from melkman.green import consumer_loop
 
     ctx = fresh_context()
-
-    dispatcher = spawn(consumer_loop, CompositeUpdateDispatcher, ctx)
-    updater = spawn(consumer_loop, CompositeUpdater, ctx)
+    agg = spawn(run_aggregator, ctx)
     
     b = []
     c = []
@@ -80,23 +78,19 @@ def test_modified_updates_composite():
     assert not c[1].has_news_item(id3)
     assert not c[2].has_news_item(id3)
 
-    dispatcher.kill()
-    updater.kill()
-    waitall([dispatcher, updater])
+    agg.kill()
     ctx.close()
     
 def test_sub_loop_sane():
     from eventlet.api import sleep
     from eventlet.proc import spawn, waitall
-    from melkman.aggregator.worker import CompositeUpdater, CompositeUpdateDispatcher
+    from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
     from melkman.green import consumer_loop
 
     ctx = fresh_context()
-
-    dispatcher = spawn(consumer_loop, CompositeUpdateDispatcher, ctx)
-    updater = spawn(consumer_loop, CompositeUpdater, ctx)
+    agg = spawn(run_aggregator, ctx)
 
     # create two composites and subscribe them 
     # to each other... O_O
@@ -135,31 +129,20 @@ def test_sub_loop_sane():
 
     sleep(1)
 
-    dispatcher.kill()
-    updater.kill()
-    waitall([dispatcher, updater])
-
-    from melkman.aggregator.api import SUBSCRIPTION_UPDATE_QUEUE
-    from melkman.aggregator.api import COMPOSITE_DISPATCH_QUEUE
-    backend = ctx.broker.create_backend()
-    assert backend.get(SUBSCRIPTION_UPDATE_QUEUE) is None
-    assert backend.get(COMPOSITE_DISPATCH_QUEUE) is None
-    
+    agg.kill()
     ctx.close()
 
 
 def test_init_subscription():
     from eventlet.api import sleep
     from eventlet.proc import spawn, waitall
-    from melkman.aggregator.worker import CompositeUpdater, CompositeUpdateDispatcher
+    from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
     from melkman.green import consumer_loop
 
     ctx = fresh_context()
-
-    dispatcher = spawn(consumer_loop, CompositeUpdateDispatcher, ctx)
-    updater = spawn(consumer_loop, CompositeUpdater, ctx)
+    agg = spawn(run_aggregator, ctx)
 
     c = Composite.create(ctx)
     c.save()
@@ -181,8 +164,5 @@ def test_init_subscription():
     for eid in entries:
         assert c.has_news_item(eid)
 
-    dispatcher.kill()
-    updater.kill()
-    waitall([dispatcher, updater])
-
+    agg.kill()
     ctx.close()
