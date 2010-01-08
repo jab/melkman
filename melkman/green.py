@@ -106,16 +106,19 @@ def resilient_consumer_loop(make_consumer, context):
             log.error("Reconnect #%d (%dth in a row), sleeping for %d seconds..." % (total_reconnects, seq_reconnects, sleep_time))
             sleep(sleep_time)
 
-def timeout_wait(event, timeout_secs):
+def timeout_wait(event, timeout_secs, default=None):
     """
-    trigger the event given in timeout seconds and 
-    wait on the event. the caller may be woken by 
-    the timeout or the event being triggered for
-    other reasons.
+    wait for the event given to be triggered 
+    for at most timeout_secs seconds.  
+    
+    The caller may be woken by the timeout or the 
+    event being triggered for other reasons.  The 
+    function returns either the value of the event
+    or the default value given in the case of a 
+    timeout.
     """
     try:
         with timeout(timeout_secs):
-            event.wait()
+            return event.wait()
     except TimeoutError:
-        pass
-
+        return default
