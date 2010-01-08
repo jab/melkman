@@ -193,12 +193,18 @@ def run_aggregator(context):
     @pooled(worker_pool)
     @always_ack
     def bucket_modified_handler(message_data, message):
-        _handle_bucket_modified(message_data, message, context)
-    
+        try:
+            _handle_bucket_modified(message_data, message, context)
+        finally:
+            context.close()
+        
     @pooled(worker_pool)
     @always_ack
     def update_subscription_handler(message_data, message):
-        _handle_update_subscription(message_data, message, context)
+        try:
+            _handle_update_subscription(message_data, message, context)
+        finally:
+            context.close()
     
     procs.append(dispatcher.start_worker(BUCKET_MODIFIED, bucket_modified_handler))
     procs.append(dispatcher.start_worker(UPDATE_SUBSCRIPTION, update_subscription_handler))
