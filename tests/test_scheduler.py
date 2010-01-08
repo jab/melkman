@@ -85,10 +85,15 @@ def test_deferred_send_receive():
     wait = timedelta(seconds=2)
     defer_message(now + wait, m1, 'testq', 'testx', ctx)
 
-    timeout_wait(got_message, 4)
+    timeout_wait(got_message, 10)
     assert got_message.ready()
     
     sched.kill()
     cons.kill()
     ctx.close()
 
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    test_deferred_send_receive()

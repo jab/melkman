@@ -27,27 +27,17 @@ import traceback
 
 from giblets import Component, implements
 from melkman.context import IRunDuringBootstrap
+from melkman.messaging import MessageDispatch
 from melkman.db import delete_all_in_view
 
 __all__ = ['defer_message', 'cancel_deferred']
 
 log = logging.getLogger(__name__)
 
-MESSAGE_SCHEDULER_EXCHANGE = 'melkman.direct'
-MESSAGE_SCHEDULER_COMMAND = 'message_scheduler'
-MESSAGE_SCHEDULER_QUEUE = 'message_scheduler'
+SCHEDULER_COMMAND = 'melkman.scheduler'
 
-class SchedulerPublisher(Publisher):
-    exchange = MESSAGE_SCHEDULER_EXCHANGE
-    routing_key = MESSAGE_SCHEDULER_COMMAND
-    delivery_mode = 2
-    mandatory = True
-
-class SchedulerConsumer(Consumer):
-    exchange = MESSAGE_SCHEDULER_EXCHANGE
-    routing_key = MESSAGE_SCHEDULER_COMMAND
-    queue = MESSAGE_SCHEDULER_QUEUE
-    durable = True
+DEFER_MESSAGE_COMMAND = 'schedule'
+CANCEL_MESSAGE_COMMAND = 'cancel'
 
 def defer_message(send_time, message, routing_key, exchange, context, **kw):
     """
@@ -65,7 +55,7 @@ def defer_message(send_time, message, routing_key, exchange, context, **kw):
     """
 
     message = {
-        'command': 'schedule',
+        'command': DEFER_MESSAGE_COMMAND,
         'timestamp': DateTimeField()._to_json(send_time),
         'exchange': exchange,
         'routing_key': routing_key,
@@ -73,24 +63,17 @@ def defer_message(send_time, message, routing_key, exchange, context, **kw):
     }
     message.update(**kw)
 
-    publisher = SchedulerPublisher(context.broker)
-    publisher.send(message)
-    publisher.close()
+    publisher = MessageDispatch(context)
+    publisher.send(message, SCHEDULER_COMMAND)
+
     
 def cancel_deferred(message_id, context):
     message = {
-        'command': 'cancel',
+        'command': CANCEL_MESSAGE_COMMAND,
         'message_id': message_id
     }
-    publisher = SchedulerPublisher(context.broker)
-    publisher.send(message)
-    publisher.close()
-
-
-def _send_noop(context):
-    publisher = SchedulerPublisher(context.broker)
-    publisher.send({'command': 'noop'})
-    publisher.close()
+    publisher = MessageDispatch(context)
+    publisher.send(message, SCHEDULER_COMMAND)
 
 
 class SchedulerSetup(Component):
@@ -102,19 +85,14 @@ class SchedulerSetup(Component):
         view_deferred_messages_by_timestamp.sync(context.db)
 
         log.info("Setting up scheduler queues...")
-        c = SchedulerConsumer(context.broker)
-        c.close()
-        context.broker.close()
-
+        dispatch = MessageDispatch(context)
+        dispatch.declare(SCHEDULER_COMMAND)
         if purge == True:
             log.info("Clearing scheduler queues...")
-            cnx = context.broker
-            backend = cnx.create_backend()
-            backend.queue_purge(MESSAGE_SCHEDULER_QUEUE)
-            backend.close()
-
+            dispatch.clear(SCHEDULER_COMMAND)
             log.info("Destroying existing deferred messages...")
             delete_all_in_view(context.db, view_deferred_messages_by_timestamp)
+        context.close()
             
 class DeliveryOptions(Schema):
     exchange = TextField()
@@ -176,4 +154,3 @@ function(doc) {
     }
 }
 ''')
-

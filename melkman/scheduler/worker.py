@@ -1,135 +1,127 @@
 from carrot.messaging import Publisher
 from copy import deepcopy
+from couchdb import ResourceConflict, ResourceNotFound
 from couchdb.schema import DateTimeField
 from datetime import datetime, timedelta
 from eventlet.api import sleep
 from eventlet.coros import event
-from eventlet.proc import spawn as spawn_proc, waitall
+from eventlet.proc import spawn as spawn_proc, waitall, killall, ProcExit
 from giblets import Component, implements
 import logging 
 import traceback
 
 from melkman.green import resilient_consumer_loop, timeout_wait
-from melkman.scheduler.api import SchedulerConsumer, DeliveryOptions, DeferredAMQPMessage, view_deferred_messages_by_timestamp
+from melkman.messaging import MessageDispatch, always_ack
+from melkman.scheduler.api import DeliveryOptions, DeferredAMQPMessage, view_deferred_messages_by_timestamp
+from melkman.scheduler.api import SCHEDULER_COMMAND, DEFER_MESSAGE_COMMAND, CANCEL_MESSAGE_COMMAND
 from melkman.worker import IWorkerProcess
 
 log = logging.getLogger(__name__)
 
-class SchedulerCommandProcessor(SchedulerConsumer):
+_COMMANDS = {}
 
-    def __init__(self, context):
-        SchedulerConsumer.__init__(self, context.broker)
-        self.context = context
-        self._commands = {}
-        self._commands['schedule'] = self._schedule
-        self._commands['cancel'] = self._cancel
-        self._commands['noop'] = self._noop
-
-    def receive(self, message_data, message):
-        try:
-            cmd = message_data.get('command', None)
-            
-            if cmd is None:
-                message.ack()
-                log.warn('No command specified in message request, ignoring: %s' % message_data)
-                return
-            
-            cmd_handler = self._commands.get(cmd, None)
-            if cmd_handler is None:
-                message.ack()
-                log.warn('Ignoring message with unknown command: %s' % cmd)
-                return
-            else:
-                cmd_handler(message_data, message)
-        
-            # proceeed as normal...
-            SchedulerConsumer.receive(self, message_data, message)
-        except:
-            log.error("Fatal client error handling message %s: %s" % (message_data, traceback.format_exc()))
-            raise
-
-    def _schedule(self, message_data, message):
-        mid = message_data.get('message_id', None)
-        if mid is not None:
-            deferred = DeferredAMQPMessage.lookup_by_message_id(self.context.db, mid)
-            if deferred is None:
-                # create new (with id)
-                deferred = DeferredAMQPMessage.create_from_message_id(mid)
-            else:
-                # if it is already in progress, too late for modification..
-                if deferred.claimed:
-                    message.ack()
-                    log.warn("Ignoring update to in progress message %s" % message_data)
-                    return
-        else:
-            # create new (anonymous)
-            deferred = DeferredAMQPMessage()
-
-        try:
-            # fill in data
-            deferred.timestamp = DateTimeField()._to_python(message_data['timestamp'])
-            deferred.options.exchange = message_data['exchange']
-            deferred.options.routing_key = message_data['routing_key']
-            if 'delivery_mode' in message_data:
-                deferred.options.delivery_mode = int(message_data['delivery_mode'])
-                if not deferred.options.delivery_mode in (1, 2):
-                    raise ValueError("Bad delivery mode: %s" % message_data['delivery_mode'])
-            if 'mandatory' in message_data:
-                deferred.options.mandatory = bool(message_data['mandatory'])
-            if 'priority' in message_data:
-                deferred.options.priority = int(message_data['priority'])
-                if not defferred.options.priority in xrange(0, 10):
-                    raise ValueError("Bad priority: %s" % deferred.options.priority)
-            deferred.message = deepcopy(message_data['message'])
-        except:
-            log.warn("Ignoring ill formatted request %s: %s" % (message_data, traceback.format_exc()))
-            message.ack()
-            return
-
-        try:
-            deferred.store(self.context.db)
-            message.ack()
-            log.info("scheduled message %s for delivery at %s" % (deferred.id, deferred.timestamp))
-        except ResourceConflict:
-            log.warn("Conflict re-storing message %s! Assuming not problematic..." % message_data)
-            message.ack()
-        except ResourceNotFound:
-            log.warn("Not found re-storing message %s! Assuming already processed..." % message_data)
-            message.ack()
-
-    def _cancel(self, message_data, message):
-        mid = message_data.get('message_id', None)
-        if mid is None:
-            log.warn("Ignoring cancel command with no message id: %s" % message_data)
-            message.ack()
-            return
+def _handle_scheduler_command(message_data, message, context):
+    """
+    main message handler for the schedule message service
+    """
     
-        deferred = DeferredAMQPMessage.lookup_by_message_id(mid)
+    try:
+        # dispatch to appropriate handler based on the 'command'
+        # field of the message.
+        cmd = message_data.get('command', None)
+        
+        if cmd is None:
+            log.warn('No command specified in message request, ignoring: %s' % message_data)
+            return
+        
+        cmd_handler = _COMMANDS.get(cmd, None)
+        if cmd_handler is None:
+            log.warn('Ignoring message with unknown command: %s' % cmd)
+            return
+        else:
+            cmd_handler(message_data, message, context)
+
+    except:
+        log.error("Fatal client error handling message %s: %s" % (message_data, traceback.format_exc()))
+        raise
+
+
+def _handle_defer_command(message_data, message, context):
+    """
+    handle the DEFER_MESSAGE command.
+    """
+    mid = message_data.get('message_id', None)
+    if mid is not None:
+        deferred = DeferredAMQPMessage.lookup_by_message_id(context.db, mid)
         if deferred is None:
-            log.warn("Ignorning cancel for missing message %s, already processed?" % message_data)
-            message.ack()
-            return
-        
-        # claim it so that nobody will start it.
-        if not deffered.claim(self.context.db):
-            log.warn("Ignoring cancel for in progress message %s" % message_data)
-            message.ack()
-            return
+            # create new (with id)
+            deferred = DeferredAMQPMessage.create_from_message_id(mid)
+        else:
+            # if it is already in progress, too late for modification..
+            if deferred.claimed:
+                log.warn("Ignoring update to in progress message %s" % message_data)
+                return
+    else:
+        # create new (anonymous)
+        deferred = DeferredAMQPMessage()
 
-        try:
-            del self.context.db[deferred._id]
-        except ResourceNotFound:
-            log.warn("Deferred message was destroyed by other means before cancelled: %s" % message_data)
-            message.ack()
-            return
+    try:
+        # fill in data
+        deferred.timestamp = DateTimeField()._to_python(message_data['timestamp'])
+        deferred.options.exchange = message_data['exchange']
+        deferred.options.routing_key = message_data['routing_key']
+        if 'delivery_mode' in message_data:
+            deferred.options.delivery_mode = int(message_data['delivery_mode'])
+            if not deferred.options.delivery_mode in (1, 2):
+                raise ValueError("Bad delivery mode: %s" % message_data['delivery_mode'])
+        if 'mandatory' in message_data:
+            deferred.options.mandatory = bool(message_data['mandatory'])
+        if 'priority' in message_data:
+            deferred.options.priority = int(message_data['priority'])
+            if not defferred.options.priority in xrange(0, 10):
+                raise ValueError("Bad priority: %s" % deferred.options.priority)
+        deferred.message = deepcopy(message_data['message'])
+    except:
+        log.warn("Ignoring ill formatted request %s: %s" % (message_data, traceback.format_exc()))
+        return
 
-    def _noop(self, message_data, message):
-        pass
-        
+    try:
+        deferred.store(context.db)
+        log.info("scheduled message %s for delivery at %s" % (deferred.id, deferred.timestamp))
+    except ResourceConflict:
+        log.warn("Conflict re-storing message %s! Assuming not problematic..." % message_data)
+    except ResourceNotFound:
+        log.warn("Not found re-storing message %s! Assuming already processed..." % message_data)
+_COMMANDS[DEFER_MESSAGE_COMMAND] = _handle_defer_command
+
+def _handle_cancel_command(message_data, message, context):
+    mid = message_data.get('message_id', None)
+    if mid is None:
+        log.warn("Ignoring cancel command with no message id: %s" % message_data)
+        return
+
+    deferred = DeferredAMQPMessage.lookup_by_message_id(mid)
+    if deferred is None:
+        log.warn("Ignorning cancel for missing message %s, already processed?" % message_data)
+        return
+
+    # claim it so that nobody will start it.
+    if not deffered.claim(context.db):
+        log.warn("Ignoring cancel for in progress message %s" % message_data)
+        return
+
+    try:
+        del self.context.db[deferred._id]
+    except ResourceNotFound:
+        log.warn("Deferred message was destroyed by other means before cancelled: %s" % message_data)
+        return
+_COMMANDS[CANCEL_MESSAGE_COMMAND] = _handle_cancel_command
+
+
 class ScheduledMessageService(object):
 
     MIN_SLEEP_TIME = timedelta(seconds=1)
-    MAX_SLEEP_TIME = timedelta(minutes=5)
+    MAX_SLEEP_TIME = timedelta(minutes=60)
     MAX_CLAIM_TIME = timedelta(minutes=5)
 
     def __init__(self, context):
@@ -139,30 +131,29 @@ class ScheduledMessageService(object):
         self._dispatch = None
 
     def run(self):
-        self._listener = spawn_proc(self.run_listener)
-        self._dispatcher = spawn_proc(self.run_dispatcher)
+        try:
+            self._listener = self._start_listener()
+            self._dispatcher = spawn_proc(self.run_dispatcher)
         
-        waitall([self._listener, self._dispatcher])
-
-    def kill(self):
-        log.info("Shutting down scheduled message service...")
-        self._listener.kill()
-        self._dispatch.kill()
+            procs = [self._listener, self._dispatcher]
+            waitall(procs)
+        except ProcExit:
+            killall(procs)
 
     ################################################################
     # The listener consumes messages on the scheduled message queue 
     # and stores the deferred messages in the database.
     ################################################################
 
-    def run_listener(self):
-        def consumer(ctx):
-            listener = SchedulerCommandProcessor(ctx)
-            listener.register_callback(self._handled_message)
-            return listener
-        resilient_consumer_loop(consumer, self.context)
+    def _start_listener(self):
+        @always_ack
+        def cb(message_data, message):
+            _handle_scheduler_command(message_data, message, self.context)
+            self.wakeup_dispatcher()
+        
+        dispatch = MessageDispatch(self.context)
+        return dispatch.start_worker(SCHEDULER_COMMAND, cb)
 
-    def _handled_message(self, message_data, message):
-        self.wakeup_dispatcher()
 
     ##############################################################
     # The dispatcher consumes deferred messages from the database 
@@ -238,8 +229,12 @@ class ScheduledMessageService(object):
                 limit = 100
             )
 
+
             vr = view_deferred_messages_by_timestamp(self.context.db, **query)
-            batch = [DeferredAMQPMessage.wrap(r.doc) for r in vr]
+            batch = []
+            for r in vr:
+                batch.append(DeferredAMQPMessage.wrap(r.doc))
+
             if len(batch) == 0:
                 break
             
@@ -248,12 +243,15 @@ class ScheduledMessageService(object):
                 try:
                     if self._dispatch_message(message):
                         dispatch_count += 1
+                except ProcExit:
+                    # asked to stop, go ahead and quit.
+                    raise
                 except:
                     log.error("Unexected error dispatching message %s: %s" %
                               (message, traceback.format_exc()))
-        
+                    
             log.info("Dispatched %d messages" % dispatch_count)
-    
+            
         return now
 
     def _dispatch_message(self, message):
