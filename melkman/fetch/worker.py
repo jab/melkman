@@ -208,7 +208,10 @@ class FeedIndexer(FeedIndexerConsumer):
 
     def handle_poll(self, url, message_data, message):
         log.info('Received poll index request for %s' % url)
-        index_feed_polling(url, self.context, request_info=message_data)
+        try:
+            index_feed_polling(url, self.context, request_info=message_data)
+        except:
+            log.error("Error indexing %s during poll request: %s" % (url, traceback.format_exc()))
     
     def handle_push(self, url, message_data, message):
         log.info('Received push index request for %s' % url)
