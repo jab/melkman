@@ -175,7 +175,7 @@ def test_sub_push():
     from melk.util.nonce import nonce_str
     from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
     from sha import new as sha1
     
@@ -186,7 +186,7 @@ def test_sub_push():
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
     
     http = Http()
     url = 'http://example.org/feed/0'
@@ -269,7 +269,7 @@ def test_sub_to_hub():
 
     from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.fetch.pubsubhubbub import WSGISubClient
     from melkman.fetch.pubsubhubbub import callback_url_for
     from melkman.fetch.pubsubhubbub import hubbub_sub
@@ -284,7 +284,7 @@ def test_sub_to_hub():
 
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     hub = FakeHub()
     hub_proc = spawn(hub.run)
@@ -359,13 +359,13 @@ def test_auto_sub():
     from melkman.green import consumer_loop
     from melkman.fetch import push_feed_index
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
 
     ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     hub = FakeHub()
     hub_proc = spawn(hub.run)    
@@ -408,7 +408,7 @@ def test_push_index_digest():
     from melk.util.nonce import nonce_str
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
@@ -417,7 +417,7 @@ def test_push_index_digest():
     ctx = fresh_context()
 
     # start a feed indexer
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     url = 'http://www.example.com/feeds/2'
     rf = RemoteFeed.create_from_url(url, ctx)
