@@ -107,7 +107,7 @@ def test_sub_verify():
     secret = nonce_str()
     
     cb = callback_url_for(url, ctx)
-    cb += '&hub.mode=subscribe'
+    cb += '?hub.mode=subscribe'
     cb += '&hub.topic=%s' % url
     cb += '&hub.challenge=%s' % challenge
     cb += '&hub.verify_token=%s' % verify_token
@@ -140,7 +140,7 @@ def test_sub_verify():
         
     # create unsubscribe callback...
     cb = callback_url_for(url, ctx)
-    cb += '&hub.mode=unsubscribe'
+    cb += '?hub.mode=unsubscribe'
     cb += '&hub.topic=%s' % url
     cb += '&hub.challenge=%s' % challenge
     cb += '&hub.verify_token=%s' % verify_token
