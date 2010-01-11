@@ -37,7 +37,7 @@ def main():
     configured in the context yaml file given.
     """
 
-    from melkman.green import GreenContext
+    from melkman.context import Context
 
     if len(sys.argv) < 3:
         print_usage()
@@ -49,7 +49,7 @@ def main():
     import logging
     log = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
-    context = GreenContext.from_yaml(yaml_file)
+    context = Context.from_yaml(yaml_file)
 
 
     all_commands = AvailableCommands(context.component_manager)

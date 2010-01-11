@@ -1,4 +1,4 @@
-from melkman.green import green_init, GreenContext
+from melkman.green import green_init
 green_init()
 
 from datetime import datetime, timedelta
@@ -14,6 +14,7 @@ from melk.util.dibject import Dibject, dibjectify
 from melk.util.hash import melk_id    
 from melk.util.nonce import nonce_str
 
+from melkman.context import Context
 
 __all__ = ['make_db', 'fresh_context', 'data_path', 'test_yaml_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
@@ -33,8 +34,7 @@ def make_db():
     return ctx.db
 
 def fresh_context():
-    from melkman.green import GreenContext
-    ctx = GreenContext.from_yaml(test_yaml_file())
+    ctx = Context.from_yaml(test_yaml_file())
     ctx.bootstrap(purge=True)
     return ctx
     

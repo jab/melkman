@@ -14,7 +14,6 @@ def test_index_request():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import request_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
 
@@ -52,7 +51,6 @@ def test_schedule_index():
     from melkman.fetch import schedule_feed_index
     from melkman.fetch.worker import run_feed_indexer
     from melkman.scheduler.worker import ScheduledMessageService
-    from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
     
@@ -95,7 +93,6 @@ def test_push_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
     

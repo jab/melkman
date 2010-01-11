@@ -11,7 +11,6 @@ def test_modified_updates_composite():
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
-    from melkman.green import consumer_loop
 
     ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
@@ -87,7 +86,6 @@ def test_sub_loop_sane():
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
-    from melkman.green import consumer_loop
 
     ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
@@ -139,7 +137,6 @@ def test_init_subscription():
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
-    from melkman.green import consumer_loop
 
     ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)

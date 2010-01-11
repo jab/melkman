@@ -10,7 +10,7 @@ from giblets import Component, implements
 import logging 
 import traceback
 
-from melkman.green import resilient_consumer_loop, timeout_wait
+from melkman.green import timeout_wait
 from melkman.messaging import MessageDispatch, always_ack
 from melkman.scheduler.api import DeliveryOptions, DeferredAMQPMessage, view_deferred_messages_by_timestamp
 from melkman.scheduler.api import SCHEDULER_COMMAND, DEFER_MESSAGE_COMMAND, CANCEL_MESSAGE_COMMAND

@@ -173,7 +173,6 @@ def test_sub_push():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melk.util.nonce import nonce_str
-    from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
     from melkman.fetch.worker import run_feed_indexer
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
@@ -267,7 +266,6 @@ def test_sub_to_hub():
     import traceback
     from webob import Request, Response
 
-    from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
     from melkman.fetch.worker import run_feed_indexer
     from melkman.fetch.pubsubhubbub import WSGISubClient
@@ -356,7 +354,6 @@ def test_auto_sub():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melkman.db import RemoteFeed
-    from melkman.green import consumer_loop
     from melkman.fetch import push_feed_index
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
     from melkman.fetch.worker import run_feed_indexer
@@ -409,7 +406,6 @@ def test_push_index_digest():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from sha import new as sha1

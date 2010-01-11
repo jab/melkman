@@ -1,8 +1,12 @@
+from melkman.green import green_init
+green_init()
+
 from yaml import load as load_yaml
 from carrot.connection import BrokerConnection
 from carrot.messaging import Publisher
 from copy import deepcopy
 from couchdb import ResourceNotFound, Server as CouchDBServer
+from eventlet.corolocal import get_ident, local as green_local
 import logging
 import os
 import threading
@@ -13,6 +17,8 @@ from giblets import Component, ExtensionInterface, ExtensionPoint, PatternCompon
 from giblets.search import find_plugins_by_entry_point
 from melk.util.dibject import Dibject, dibjectify, json_wake
 from melk.util.typecheck import is_dicty, asbool
+
+from melkman.green import GreenAMQPBackend
 
 log = logging.getLogger(__name__)
 
@@ -33,13 +39,14 @@ DEFAULTS = {
 
 MELKMAN_PLUGIN_ENTRY_POINT = 'melkman_plugins'
 
+
 class Context(object):
     """
     holds common configuration related data and methods.
     """
     def __init__(self, config):
         self.config = dibjectify(config)
-        self._local = threading.local()
+        self._local = green_local()
         find_plugins_by_entry_point(MELKMAN_PLUGIN_ENTRY_POINT)
 
     def close(self):
@@ -52,6 +59,13 @@ class Context(object):
         if hasattr(self._local, 'broker'):
             self.broker.close()
             del self._local.broker
+
+        # XXX fix this better...
+        try:
+            del object.__getattribute__(self._local, '__dict__').setdefault('__objs', {})[get_ident()]
+        except KeyError:
+            pass
+
 
     def __enter__(self):
         return self
@@ -105,7 +119,9 @@ class Context(object):
         kargs = dict(self.config.amqp)
         if 'port' in kargs:
             kargs['port'] = int(kargs['port'])
+        kargs['backend_cls'] = GreenAMQPBackend
         return BrokerConnection(**kargs)
+
         
     ##################################
     # Components

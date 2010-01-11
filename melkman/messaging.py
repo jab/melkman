@@ -19,15 +19,29 @@
 
 from carrot.messaging import Publisher, Consumer
 from eventlet.coros import event
-from eventlet.proc import spawn, waitall
+from eventlet.proc import spawn, waitall, ProcExit
 import logging
 import traceback
 from uuid import uuid1
-from melkman.green import consumer_loop
 
 log = logging.getLogger(__name__)
 
 __all__ = ['EventBus', 'MessageDispatch']
+
+
+def consumer_loop(make_consumer, context):
+    consumer = None
+    try:
+        consumer = make_consumer(context)
+        it = consumer.iterconsume()
+        while it.next():
+            pass
+    except ProcExit:
+        log.debug("consumer_loop: killed")
+    finally:
+        if consumer:
+            consumer.close()
+        context.close()
 
 def _exchange_for_channel(channel):
     return 'eventbus.%s' % channel
