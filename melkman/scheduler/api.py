@@ -17,7 +17,6 @@
 # Boston, MA  02110-1301
 # USA
 
-from carrot.messaging import Consumer, Publisher
 from couchdb import ResourceConflict, ResourceNotFound
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
@@ -27,10 +26,11 @@ import traceback
 
 from giblets import Component, implements
 from melkman.context import IRunDuringBootstrap
-from melkman.messaging import MessageDispatch
+from melkman.messaging import MessageDispatch, MessageDispatchPublisher
+from melkman.messaging import EventPublisher
 from melkman.db import delete_all_in_view
 
-__all__ = ['defer_message', 'cancel_deferred']
+__all__ = ['defer_amqp_message', 'defer_event', 'defer_message', 'cancel_deferred']
 
 log = logging.getLogger(__name__)
 
@@ -39,8 +39,41 @@ SCHEDULER_COMMAND = 'melkman.scheduler'
 DEFER_MESSAGE_COMMAND = 'schedule'
 CANCEL_MESSAGE_COMMAND = 'cancel'
 
-def defer_message(send_time, message, routing_key, exchange, context, **kw):
+def defer_event(send_time, channel, event, context, **kw):
     """
+    defer EventBus.send(channel, event) until send_time
+    """
+    pub = EventPublisher(channel, context)
+    return defer_publish(send_time, event, pub, context, **kw)
+
+def defer_message(send_time, message, message_type, context, **kw):
+    """
+    defer MessageDispatch.send(message, message_type) until send_time 
+    """
+    pub = MessageDispatchPublisher(message_type, context)
+    return defer_publish(send_time, message, pub, context, **kw)
+    
+def defer_publish(send_time, message, publisher, context, **kw):
+    """
+    Defers the action of publisher.send(message) until the 
+    time specified. 
+    
+    message - message to defer
+    publisher - a carrot.messaging.Publisher with all 
+                publication details specified.
+    """
+    return defer_amqp_message(send_time, message, publisher.routing_key,
+                              publisher.exchange, context, 
+                              exchange_type=publisher.exchange_type, 
+                              delivery_mode=publisher.delivery_mode,
+                              **kw)
+    
+
+def defer_amqp_message(send_time, message, routing_key, exchange, context, **kw):
+    """
+    This is a lower level version of defer which allows
+    specification of the exact amqp exchange and routing_key 
+
     send_time: datetime representing when to send
     message: the message to send
     exchange: the exchange to send to
@@ -66,7 +99,8 @@ def defer_message(send_time, message, routing_key, exchange, context, **kw):
     publisher = MessageDispatch(context)
     publisher.send(message, SCHEDULER_COMMAND)
 
-    
+
+
 def cancel_deferred(message_id, context):
     message = {
         'command': CANCEL_MESSAGE_COMMAND,
@@ -97,6 +131,7 @@ class SchedulerSetup(Component):
 class DeliveryOptions(Schema):
     exchange = TextField()
     routing_key = TextField()
+    exchange_type = TextField(default='direct')
     delivery_mode = IntegerField(default=2)
     mandatory = BooleanField(default=False)
     priority = IntegerField(default=0)

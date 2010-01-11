@@ -50,6 +50,12 @@ class EventBus(object):
         pub.close()
 
     def add_listener(self, channel, callback):
+        """
+        add a callback that is triggered whenever a message
+        is send to the channel specified. 
+        
+        callback - single argument function accepting the event.
+        """
         consumer = self._consumers.get(channel)
         if consumer is None:
             consumer, proc = self._start_consumer(channel)
@@ -105,7 +111,10 @@ class MessageDispatch(object):
     """
     MessageDispatch manages sending messages out to queues of 
     workers and registration of workers based on message type
-    and function.
+    and function.  A message is delivered to queues based on 
+    its type and processed by exactly one listener per queue.  
+    
+    If broadcast to all listeners is desired, see EventBus.
     """
 
     def __init__(self, context):

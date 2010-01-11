@@ -80,6 +80,12 @@ def _handle_defer_command(message_data, message, context):
             deferred.options.priority = int(message_data['priority'])
             if not defferred.options.priority in xrange(0, 10):
                 raise ValueError("Bad priority: %s" % deferred.options.priority)
+        if 'exchange_type' in message_data:
+            ex_type = message_data['exchange_type']
+            if not ex_type in ('direct', 'fanout', 'topic', 'headers'):
+                raise ValueError("Bad exchange type: %s" % ex_type)
+            deferred.options.exchange_type = ex_type
+        
         deferred.message = deepcopy(message_data['message'])
     except:
         log.warn("Ignoring ill formatted request %s: %s" % (message_data, traceback.format_exc()))
@@ -139,6 +145,7 @@ class ScheduledMessageService(object):
             waitall(procs)
         except ProcExit:
             killall(procs)
+            raise
 
     ################################################################
     # The listener consumes messages on the scheduled message queue 
@@ -259,7 +266,8 @@ class ScheduledMessageService(object):
             return
         
         try:
-            publisher = Publisher(self.context.broker, exchange=message.options.exchange)
+            publisher = Publisher(self.context.broker, exchange=message.options.exchange,
+                                  exchange_type=message.options.exchange_type)
             publisher.send(message.message,
                            routing_key = message.options.routing_key,
                            delivery_mode = message.options.delivery_mode,
