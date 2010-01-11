@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 def test_index_request():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import request_feed_index
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
@@ -22,7 +22,7 @@ def test_index_request():
     ctx = fresh_context()
     
     # start a feed indexer
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
     
     #start a web server...
     www = os.path.join(data_path(), 'www')
@@ -50,7 +50,7 @@ def test_index_request():
 def test_schedule_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import schedule_feed_index
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.scheduler.worker import ScheduledMessageService
     from melkman.green import consumer_loop
     from eventlet.api import sleep
@@ -59,7 +59,7 @@ def test_schedule_index():
     ctx = fresh_context()
     
     # start a feed indexer
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
     
     # scheduled message service
     sms = ScheduledMessageService(ctx)
@@ -94,7 +94,7 @@ def test_schedule_index():
 def test_push_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.green import consumer_loop
     from eventlet.api import sleep
     from eventlet.proc import spawn
@@ -102,7 +102,7 @@ def test_push_index():
     ctx = fresh_context()
     
     # start a feed indexer
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
     
     url = 'http://www.example.com/feeds/2'
     content = random_atom_feed(url, 10)

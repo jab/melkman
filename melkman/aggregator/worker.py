@@ -213,6 +213,7 @@ def run_aggregator(context):
         waitall(procs)
     except ProcExit:
         killall(procs)
+        worker_pool.killall()
         raise
 
 class AggregatorProcess(Component):
