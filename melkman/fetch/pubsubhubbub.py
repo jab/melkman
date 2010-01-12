@@ -2,9 +2,11 @@ import logging
 from giblets import Component, implements
 from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
+import hmac
 from httplib2 import Http
 import traceback
-from urllib import quote_plus, urlencode
+from urllib import quote_plus, unquote_plus, urlencode
+from urlparse import urljoin
 from webob import Request, Response
 
 try:
@@ -25,13 +27,21 @@ log = logging.getLogger(__name__)
 
 def callback_url_for(feed_url, context):
     base_url = context.config.pubsubhubbub_client.callback_url
-    return '%s?url=%s' % (base_url, quote_plus(feed_url))
+    if not base_url.endswith('/'):
+        base_url += '/'
+    return urljoin(base_url, quote_plus(feed_url))
 
 def topic_url_for(feed):
     for link in feed.feed_info.get('links', []):
         if link.rel == 'self':
             return link.href
     return None
+
+def _determine_feed_url(req):
+    url = unquote_plus(req.path)
+    if url.startswith('/'):
+        url = url[1:]
+    return url
 
 def hubbub_sub(feed, context, hub_url=None):
     topic_url = topic_url_for(feed)
@@ -146,7 +156,7 @@ class WSGISubClient(object):
         mode = req.GET.get('hub.mode', None)
         topic = req.GET.get('hub.topic', None)
         verify_token = req.GET.get('hub.verify_token', None)
-        url = req.GET.get('url', None)
+        url = _determine_feed_url(req)
 
         if topic is None or mode is None or verify_token is None or url is None:
             return False
@@ -176,7 +186,7 @@ class WSGISubClient(object):
         return res
 
     def _handle_callback(self, req):
-        url = req.GET.get('url', None)
+        url = _determine_feed_url(req)
         digest = req.headers.get('X-Hub-Signature', None)
         content = req.body
         push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
@@ -250,6 +260,16 @@ class HubPushValidator(Component):
 
         return True
 
+
+def psh_digest(content, secret):
+    """
+    compute digest of content and secret
+    according to pubsubhubbub spec
+    """
+    return hmac.new(secret.encode('utf-8'), 
+                    content.encode('utf-8'),
+                    sha1).hexdigest()
+
 def _digest_matches(digest, content, secret):
 
     if not secret or not digest or not content:
@@ -258,10 +278,6 @@ def _digest_matches(digest, content, secret):
     if not digest.startswith("sha1="):
         return False
 
-    digest = digest[5:]
-
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-
-    return hasher.hexdigest() == digest
+    digest = digest[5:] # digest from server
+    
+    return digest == psh_digest(content, secret)
