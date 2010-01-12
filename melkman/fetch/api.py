@@ -52,10 +52,11 @@ def schedule_feed_index(url, timestamp, context, message_id=None, skip_reschedul
     if skip_reschedule:
         message['skip_reschedule'] = True
 
+    options = {}
     if message_id is not None:
         options['message_id'] = message_id
 
-    defer_message(timestamp, message, INDEX_FEED_COMMAND, context)
+    defer_message(timestamp, message, INDEX_FEED_COMMAND, context, **options)
 
 
 def push_feed_index(url, content, context, **kw):
