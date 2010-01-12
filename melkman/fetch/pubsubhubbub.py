@@ -2,6 +2,7 @@ import logging
 from giblets import Component, implements
 from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
+import hmac
 from httplib2 import Http
 import traceback
 from urllib import quote_plus, unquote_plus, urlencode
@@ -259,6 +260,16 @@ class HubPushValidator(Component):
 
         return True
 
+
+def psh_digest(content, secret):
+    """
+    compute digest of content and secret
+    according to pubsubhubbub spec
+    """
+    return hmac.new(secret.encode('utf-8'), 
+                    content.encode('utf-8'),
+                    sha1).hexdigest()
+
 def _digest_matches(digest, content, secret):
 
     if not secret or not digest or not content:
@@ -267,10 +278,6 @@ def _digest_matches(digest, content, secret):
     if not digest.startswith("sha1="):
         return False
 
-    digest = digest[5:]
-
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-
-    return hasher.hexdigest() == digest
+    digest = digest[5:] # digest from server
+    
+    return digest == psh_digest(content, secret)

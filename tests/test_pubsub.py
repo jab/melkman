@@ -175,8 +175,7 @@ def test_sub_push():
     from melk.util.nonce import nonce_str
     from melkman.db import RemoteFeed
     from melkman.fetch.worker import run_feed_indexer
-    from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
-    from sha import new as sha1
+    from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for, psh_digest
     
     import logging
     logging.basicConfig(level=logging.WARN)
@@ -192,12 +191,7 @@ def test_sub_push():
     content = random_atom_feed(url, 10)
     secret = nonce_str()
     
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()
-
-    
+    digest = 'sha1=%s' % psh_digest(content, secret)
     cb = callback_url_for(url, ctx)
     
     assert RemoteFeed.get_by_url(url, ctx) == None
@@ -262,7 +256,6 @@ def test_sub_to_hub():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melk.util.nonce import nonce_str
-    from sha import new as sha1
     import traceback
     from webob import Request, Response
 
@@ -272,7 +265,7 @@ def test_sub_to_hub():
     from melkman.fetch.pubsubhubbub import callback_url_for
     from melkman.fetch.pubsubhubbub import hubbub_sub
     from melkman.fetch.pubsubhubbub import hubbub_unsub
-
+    from melkman.fetch.pubsubhubbub import psh_digest
     
     import logging
     logging.basicConfig(level=logging.WARN)
@@ -308,10 +301,8 @@ def test_sub_to_hub():
 
     # try a push (should work)
     content = random_atom_feed(feed_url, 10, link=feed_url)
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()    
+    digest = 'sha1=%s' % psh_digest(content, secret)
+
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(0.5)
@@ -330,10 +321,7 @@ def test_sub_to_hub():
     
     # try a push (should fail)
     content = random_atom_feed(feed_url, 10, link=feed_url)
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()    
+    digest = "sha1=%s" % psh_digest(content, secret)
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(0.5)
@@ -408,7 +396,7 @@ def test_push_index_digest():
     from melkman.fetch.worker import run_feed_indexer
     from eventlet.api import sleep
     from eventlet.proc import spawn
-    from sha import new as sha1
+    from melkman.fetch.pubsubhubbub import psh_digest
 
     ctx = fresh_context()
 
@@ -425,10 +413,7 @@ def test_push_index_digest():
     content = random_atom_feed(url, 10)
     ids = melk_ids_in(content, url)
 
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    correct_digest = 'sha1=%s' % hasher.hexdigest()
+    correct_digest = 'sha1=%s' % psh_digest(content, secret)
     wrong_digest = 'wrong digest'
 
     #
