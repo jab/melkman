@@ -2,7 +2,7 @@ from helpers import *
 
 def test_event_send_receive():
     from eventlet.api import sleep
-    from melkman.eventbus import EventBus
+    from melkman.messaging import EventBus
     ctx = fresh_context()
     event_bus = EventBus(ctx)
     
@@ -22,9 +22,9 @@ def test_event_send_receive():
     event_bus.kill()
     
 
-def test_multiple_listeners():
+def test_event_multiple_listeners():
     from eventlet.api import sleep
-    from melkman.eventbus import EventBus
+    from melkman.messaging import EventBus
     ctx = fresh_context()
     event_bus = EventBus(ctx)
 
@@ -51,9 +51,9 @@ def test_multiple_listeners():
     event_bus.kill()
 
 
-def test_multiple_consumers():
+def test_event_multiple_consumers():
     from eventlet.api import sleep
-    from melkman.eventbus import EventBus
+    from melkman.messaging import EventBus
     ctx = fresh_context()
     event_bus1 = EventBus(ctx)
 
@@ -90,9 +90,9 @@ def test_multiple_consumers():
     event_bus1.kill()
     event_bus2.kill()
 
-def test_multiple_channels():
+def test_event_multiple_channels():
     from eventlet.api import sleep
-    from melkman.eventbus import EventBus
+    from melkman.messaging import EventBus
     ctx = fresh_context()
     event_bus = EventBus(ctx)
 
@@ -124,3 +124,52 @@ def test_multiple_channels():
     assert got_events['two'] == 1
 
     event_bus.kill()
+
+
+def test_dispatch_send_recv():
+    from eventlet.coros import event
+    from melkman.green import timeout_wait
+    from melkman.messaging import MessageDispatch, always_ack
+    ctx = fresh_context()
+    
+    w = MessageDispatch(ctx)
+    message_type = 'test_dispatch_send_recv'
+    
+    work_result = event()
+    
+    @always_ack
+    def handler(job, message):
+        work_result.send(sum(job['values']))
+    
+    worker = w.start_worker(message_type, handler)
+    w.send({'values': [1, 2]}, message_type)
+    
+    assert timeout_wait(work_result, 2) == 3
+    worker.kill()
+
+
+def test_dispatch_one_receiver():
+    from eventlet.api import sleep
+    from eventlet.coros import event
+    from melkman.messaging import MessageDispatch, always_ack
+    ctx = fresh_context()
+
+    w = MessageDispatch(ctx)
+    message_type = 'test_dispatch_one_receiver'
+
+    work_result = event()
+
+    got_events = {'count': 0}
+    
+    @always_ack
+    def handler(job, message):
+        got_events['count'] += 1
+
+    worker1 = w.start_worker(message_type, handler)
+    worker2 = w.start_worker(message_type, handler)
+    
+    w.send({}, message_type)
+    sleep(2)
+    
+    assert got_events['count'] == 1
+    

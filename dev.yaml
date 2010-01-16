@@ -1,4 +1,3 @@
-
 couchdb: {
     hostname: localhost,
     port: 5984,
@@ -14,10 +13,9 @@ amqp: {
 }
 
 pubsubhubbub_client: {
-    host: 127.0.0.1, # localhost only
-    port: 9449,
-    callback_url: "http://localhost:9449",
-    # callback_url = http://www.example.com/where_its_exposed/pshb    
+    host: 0.0.0.0, # accept remote requests
+    port: 8080,
+    callback_url: "http://yourdomain.com:8080/",
 }
 
 plugins:

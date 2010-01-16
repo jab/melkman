@@ -1,15 +1,19 @@
 from datetime import datetime, timedelta
 from giblets import Component, ExtensionPoint, implements
-from eventlet.api import spawn
+from eventlet.pool import Pool
+from eventlet.proc import spawn, ProcExit
 from httplib2 import Http
 import logging
 import traceback
 
 from melkman.db import RemoteFeed
-from melkman.fetch.api import schedule_feed_index, FeedIndexerConsumer
+from melkman.fetch.api import INDEX_FEED_COMMAND
+from melkman.fetch.api import schedule_feed_index
 from melkman.fetch.api import PostIndexAction, IndexRequestFilter
+from melkman.messaging import MessageDispatch, always_ack, pooled
+from melkman.worker import IWorkerProcess
 
-__all__ = ['FeedIndexer', 'index_feed_polling']
+__all__ = ['run_feed_indexer', 'index_feed_polling']
 
 log = logging.getLogger(__name__)
 
@@ -172,46 +176,66 @@ def compute_next_fetch_interval_aimd(update_history):
 
     return new_interval
 
-class FeedIndexer(FeedIndexerConsumer):
+
+#####################
+# Message handling
+#####################s
+
+def handle_message(message_data, message, context):
     """
-    Implements an asynchronous feed indexer process.
     """
-
-    def __init__(self, context):
-        FeedIndexerConsumer.__init__(self, context.broker)
-        self.context = context
-
-    def receive(self, message_data, message):
-        spawn(self.handle_message, message_data, message)
-
-    def handle_message(self, message_data, message):
-        try:
-            url = message_data.get('url', None)
-            if url is None:
-                log.error("malformed index_feed message, no url: %s" % message)
-                return
-            
-            if 'content' in message_data:
-                self.handle_push(url, message_data, message)
-            else:
-                self.handle_poll(url, message_data, message)
-
-            log.info('Completed index of %s' % url)
-        finally:
-            try:
-                message.ack()
-            except:
-                log.error("Failed to acknowledge message: %s" % traceback.format_exc())
-            log.debug("completed handling message.")
-
-    def handle_poll(self, url, message_data, message):
-        log.info('Received poll index request for %s' % url)
-        index_feed_polling(url, self.context, request_info=message_data)
+    try:
+        url = message_data.get('url', None)
+        if url is None:
+            log.error("malformed index_feed message, no url: %s" % message)
+            return
     
-    def handle_push(self, url, message_data, message):
-        log.info('Received push index request for %s' % url)
-        try:
-            content = message_data['content']
-            index_feed_push(url, content, self.context, request_info=message_data)
-        except:
-            log.error("Error pushing %s: %s" % (message_data, traceback.format_exc()))
+        if 'content' in message_data:
+            _handle_push(url, message_data, message, context)
+        else:
+            _handle_poll(url, message_data, message, context)
+
+        log.info('Completed index of %s' % url)
+        log.debug("completed handling message.")
+    except: 
+        log.error('Error handling feed indexer command (%s): %s' % 
+                  (message_data, traceback.format_exc()))
+
+def _handle_poll(url, message_data, message, context):
+    log.info('Received poll index request for %s' % url)
+    try:
+        index_feed_polling(url, context, request_info=message_data)
+    except:
+        log.error("Error indexing %s during poll request: %s" % (url, traceback.format_exc()))
+
+def _handle_push(url, message_data, message, context):
+    log.info('Received push index request for %s' % url)
+    try:
+        content = message_data['content']
+        index_feed_push(url, content, context, request_info=message_data)
+    except:
+        log.error("Error pushing %s: %s" % (message_data, traceback.format_exc()))
+
+
+def run_feed_indexer(context):
+    worker_pool = Pool(max_size=10000)
+    dispatch = MessageDispatch(context)
+    
+    @pooled(worker_pool)
+    @always_ack
+    def cb(message_data, message):
+        return handle_message(message_data, message, context)
+        
+    try:
+        proc = dispatch.start_worker(INDEX_FEED_COMMAND, cb)
+        proc.wait()
+    except ProcExit:
+        proc.kill()
+        worker_pool.killall()
+        raise
+
+class FeedIndexerProcess(Component):
+    implements(IWorkerProcess)
+    
+    def run(self, context):
+        run_feed_indexer(context)

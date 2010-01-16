@@ -331,7 +331,7 @@ def test_bucket_maxlen():
         return map(idgetter, sorted(entries.values(), key=sortkey))
 
     def check_before_and_after_save(bucket):
-        bucketlen = len(bucket)
+        bucketlen = len(bucket.entries)
         if bucket.maxlen is not None:
             assert bucketlen <= bucket.maxlen
 
@@ -374,17 +374,17 @@ def test_direct_entries_access():
     # through the interface, make sure it's there after saving (i.e. NewsBucket
     # is properly observing changes to the underlying nldict)
     bucket = NewsBucket.create(ctx)
-    assert len(bucket) == 0
+    assert len(bucket.entries) == 0
     item1 = NewsItemRef.create_from_info(ctx, bucket.id, item_id=random_id())
     item2 = NewsItemRef.create_from_info(ctx, bucket.id, item_id=random_id())
     bucket.entries[item1.item_id] = item1
     bucket.entries[item2.item_id] = item2
-    assert len(bucket) == 2
+    assert len(bucket.entries) == 2
     assert bucket.has_news_item(item1)
     assert bucket.has_news_item(item2)
     bucket.save()
     bucket = NewsBucket.get(bucket.id, ctx)
-    assert len(bucket) == 2
+    assert len(bucket.entries) == 2
     assert bucket.has_news_item(item1)
     assert bucket.has_news_item(item2)
 
@@ -397,7 +397,7 @@ def test_direct_entries_access():
     # so after re-retrieving the document the nldict's maxlen is the old value
     bucket = NewsBucket.get(bucket.id, ctx)
     assert bucket.entries.maxlen is None
-    assert len(bucket) == 2 # and the bucket still has two items
+    assert len(bucket.entries) == 2 # and the bucket still has two items
 
     # if we save after changing the nldict's maxlen...
     bucket.entries.maxlen = 1  # items deleted in memory
@@ -405,7 +405,7 @@ def test_direct_entries_access():
     bucket.save()
     # ...items are now deleted from persistent storage too
     bucket = NewsBucket.get(bucket.id, ctx)
-    assert len(bucket) == 1
+    assert len(bucket.entries) == 1
     # but the maxlen field on the document was still never set
     assert bucket.maxlen == None
 
@@ -413,13 +413,13 @@ def test_direct_entries_access():
     bucket.entries.update({item1.item_id: item1, item2.item_id: item2})
     bucket.save()
     bucket = NewsBucket.get(bucket.id, ctx)
-    assert len(bucket) == 2
+    assert len(bucket.entries) == 2
 
     # if we set the maxlen field on the bucket rather than using set_maxlen...
     bucket.maxlen = 1
     # maxlen changes in the document but the underlying nldict is not updated:
-    assert len(bucket) == 2
+    assert len(bucket.entries) == 2
     # ...until *after* saving:
     bucket.save()
     bucket = NewsBucket.get(bucket.id, ctx)
-    assert len(bucket) == 1
+    assert len(bucket.entries) == 1

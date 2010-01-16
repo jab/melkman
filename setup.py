@@ -37,7 +37,7 @@ setup(
                       'eventlet>=0.9',
                       'giblets',
                       'greenamqp',
-                      'httplib2<0.5',
+                      'httplib2',
                       'melk.util',
                       'simplejson',
                       'PyYAML',
@@ -51,10 +51,16 @@ setup(
     entry_points="""
     [melkman_plugins]
     scheduler = melkman.scheduler.api
+    scheduler_proc = melkman.scheduler.worker
     fetch = melkman.fetch.api
+    fetch_proc = melkman.fetch.worker
     aggregator = melkman.aggregator.api
+    aggregator_worker = melkman.aggregator.worker
     filters = melkman.filters
     pubsub = melkman.fetch.pubsubhubbub
+    
+    [console_scripts]
+    melkman=melkman.runner:main
     """,
 )
 

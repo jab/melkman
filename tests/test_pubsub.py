@@ -107,7 +107,7 @@ def test_sub_verify():
     secret = nonce_str()
     
     cb = callback_url_for(url, ctx)
-    cb += '&hub.mode=subscribe'
+    cb += '?hub.mode=subscribe'
     cb += '&hub.topic=%s' % url
     cb += '&hub.challenge=%s' % challenge
     cb += '&hub.verify_token=%s' % verify_token
@@ -140,7 +140,7 @@ def test_sub_verify():
         
     # create unsubscribe callback...
     cb = callback_url_for(url, ctx)
-    cb += '&hub.mode=unsubscribe'
+    cb += '?hub.mode=unsubscribe'
     cb += '&hub.topic=%s' % url
     cb += '&hub.challenge=%s' % challenge
     cb += '&hub.verify_token=%s' % verify_token
@@ -173,11 +173,9 @@ def test_sub_push():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melk.util.nonce import nonce_str
-    from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
-    from melkman.fetch.worker import FeedIndexer
-    from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
-    from sha import new as sha1
+    from melkman.fetch.worker import run_feed_indexer
+    from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for, psh_digest
     
     import logging
     logging.basicConfig(level=logging.WARN)
@@ -186,19 +184,14 @@ def test_sub_push():
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
     
     http = Http()
     url = 'http://example.org/feed/0'
     content = random_atom_feed(url, 10)
     secret = nonce_str()
     
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()
-
-    
+    digest = 'sha1=%s' % psh_digest(content, secret)
     cb = callback_url_for(url, ctx)
     
     assert RemoteFeed.get_by_url(url, ctx) == None
@@ -263,18 +256,16 @@ def test_sub_to_hub():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melk.util.nonce import nonce_str
-    from sha import new as sha1
     import traceback
     from webob import Request, Response
 
-    from melkman.green import consumer_loop
     from melkman.db import RemoteFeed
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
     from melkman.fetch.pubsubhubbub import WSGISubClient
     from melkman.fetch.pubsubhubbub import callback_url_for
     from melkman.fetch.pubsubhubbub import hubbub_sub
     from melkman.fetch.pubsubhubbub import hubbub_unsub
-
+    from melkman.fetch.pubsubhubbub import psh_digest
     
     import logging
     logging.basicConfig(level=logging.WARN)
@@ -284,7 +275,7 @@ def test_sub_to_hub():
 
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     hub = FakeHub()
     hub_proc = spawn(hub.run)
@@ -310,10 +301,8 @@ def test_sub_to_hub():
 
     # try a push (should work)
     content = random_atom_feed(feed_url, 10, link=feed_url)
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()    
+    digest = 'sha1=%s' % psh_digest(content, secret)
+
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(0.5)
@@ -332,10 +321,7 @@ def test_sub_to_hub():
     
     # try a push (should fail)
     content = random_atom_feed(feed_url, 10, link=feed_url)
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    digest = "sha1=%s" % hasher.hexdigest()    
+    digest = "sha1=%s" % psh_digest(content, secret)
     r, c = http.request(cb, 'POST', body=content, headers={'X-Hub-Signature': digest})
     assert r.status == 200, 'Expected 200, got %d' % r.status
     sleep(0.5)
@@ -356,16 +342,15 @@ def test_auto_sub():
     from eventlet.api import sleep
     from eventlet.proc import spawn
     from melkman.db import RemoteFeed
-    from melkman.green import consumer_loop
     from melkman.fetch import push_feed_index
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
-    from melkman.fetch.worker import FeedIndexer
+    from melkman.fetch.worker import run_feed_indexer
 
     ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     hub = FakeHub()
     hub_proc = spawn(hub.run)    
@@ -408,16 +393,15 @@ def test_push_index_digest():
     from melk.util.nonce import nonce_str
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
-    from melkman.fetch.worker import FeedIndexer
-    from melkman.green import consumer_loop
+    from melkman.fetch.worker import run_feed_indexer
     from eventlet.api import sleep
     from eventlet.proc import spawn
-    from sha import new as sha1
+    from melkman.fetch.pubsubhubbub import psh_digest
 
     ctx = fresh_context()
 
     # start a feed indexer
-    indexer = spawn(consumer_loop, FeedIndexer, ctx)
+    indexer = spawn(run_feed_indexer, ctx)
 
     url = 'http://www.example.com/feeds/2'
     rf = RemoteFeed.create_from_url(url, ctx)
@@ -429,10 +413,7 @@ def test_push_index_digest():
     content = random_atom_feed(url, 10)
     ids = melk_ids_in(content, url)
 
-    hasher = sha1()
-    hasher.update(secret)
-    hasher.update(content)
-    correct_digest = 'sha1=%s' % hasher.hexdigest()
+    correct_digest = 'sha1=%s' % psh_digest(content, secret)
     wrong_digest = 'wrong digest'
 
     #
