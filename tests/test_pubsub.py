@@ -171,7 +171,7 @@ def test_sub_verify():
     assert r.status == 404, 'Expected 404, got %d' % r.status
         
     # after disabling, the unsub verify should be okay
-    rf = RemoteFeed.get(rf.id, ctx)
+    rf.reload()
     rf.hub_info.enabled = False
     rf.save()
     r, c = http.request(cb, 'GET')

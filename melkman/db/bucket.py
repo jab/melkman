@@ -262,6 +262,12 @@ class NewsBucket(DocumentHelper):
     def clear(self):
         self._lazy_load_entries()
         self._entries.clear()
+        
+    def reload(self):
+        DocumentHelper.reload(self)
+        self._updated = {}
+        self._removed = {}
+        self._entries = None
 
     def save(self):
         self.last_modification_date = datetime.utcnow()

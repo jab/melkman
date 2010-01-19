@@ -56,6 +56,20 @@ class DocumentHelper(Document):
     def delete(self):
         del self._context.db[self.id]
     
+    def reload(self):
+        """
+        re-get the object from the database, wiping out 
+        any local changes. 
+        
+        raises ResourceNotFound if the object does not exist 
+        in the database.
+        
+        subclasses should override to wipe any local 
+        storage associated with the state of the object.
+        """
+        self._data = self._context.db[self.id]
+    
+    
 SUPPORTED_BATCH_QUERY_ARGS = set(['startkey', 'endkey', 'skip', 'descending', 'include_docs', 'limit'])
 def batched_view_iter(db, view, batch_size, **kw):
     """

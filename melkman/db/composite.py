@@ -104,6 +104,12 @@ class Composite(NewsBucket):
         if self._rejected is not None:
             self._rejected.save(self)
 
+    def reload(self):
+        NewsBucket.reload(self)
+        self._rejected = None
+        self._added_subs = set()
+        self._removed_subs = set()
+
     def _send_modified_event(self, **kw):
         kwa = dict(kw)
         kwa['new_subscriptions'] = list(self._added_subs)

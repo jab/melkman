@@ -119,7 +119,7 @@ def test_composite_filtered_update():
         assert not cc.has_news_item(item)
 
     cc.save()
-    cc = Composite.get(cc.id, ctx)
+    cc.reload()
     
     for item in ok_items:
         assert cc.has_news_item(item)

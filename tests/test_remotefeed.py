@@ -56,7 +56,7 @@ def test_update_feed_repeat_index():
     feed.save()
 
     # reload...
-    feed = RemoteFeed.get(feed.id, ctx)
+    feed.reload()
     # update again with identical content,
     # should have no effect.
     updates = feed.update_from_feed(content, method='test')

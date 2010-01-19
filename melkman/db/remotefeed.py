@@ -106,6 +106,10 @@ class RemoteFeed(NewsBucket):
         self._updated_news_items.update(updated)
         return len(updated)
 
+    def reload(self):
+        NewsBucket.reload(self)
+        self._updated_news_items = {}
+
     def save(self):
         try:
             NewsBucket.save(self)

@@ -43,7 +43,7 @@ def test_modified_updates_composite():
     
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
     
     assert c[0].has_news_item(id1)
     assert not c[1].has_news_item(id1)
@@ -57,7 +57,7 @@ def test_modified_updates_composite():
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
     
     assert not c[0].has_news_item(id2)
     assert c[1].has_news_item(id2)
@@ -71,7 +71,7 @@ def test_modified_updates_composite():
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
 
     assert not c[0].has_news_item(id3)
     assert not c[1].has_news_item(id3)
@@ -113,8 +113,8 @@ def test_sub_loop_sane():
     sleep(1)
 
     # refresh
-    c1 = Composite.get(c1.id, ctx)
-    c2 = Composite.get(c2.id, ctx)
+    c1.reload()
+    c2.reload()
 
     assert len(c1.entries) == 20
     assert len(c2.entries) == 20
@@ -157,7 +157,7 @@ def test_init_subscription():
     c.save()
     sleep(.5)
 
-    c = Composite.get(c.id, ctx)
+    c.reload()
     for eid in entries:
         assert c.has_news_item(eid)
 
