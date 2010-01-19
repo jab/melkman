@@ -52,7 +52,9 @@ class HubInfo(Schema):
     hub_url = TextField()
     verify_token = TextField(default='')
     secret = TextField(default='')
-    enabled = BooleanField(default=False)
+    subscribed = BooleanField(default=False) # active subscription
+    next_sub_time = DateTimeField()
+    enabled = BooleanField(default=True) # pubsub enabled for this feed
 
 
 MAX_HISTORY = 10

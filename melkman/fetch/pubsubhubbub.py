@@ -1,5 +1,6 @@
 import logging
 from giblets import Component, implements
+from datetime import datetime, timedelta
 from eventlet.api import tcp_listener
 from eventlet.wsgi import server as wsgi_server
 import hmac
@@ -25,25 +26,45 @@ from melk.util.nonce import nonce_str
 
 log = logging.getLogger(__name__)
 
+DEFAULT_LEASE = 604800
+
 def callback_url_for(feed_url, context):
+    """
+    for a given feed url, determine the callback url that 
+    a hub should post to update our subscription to 
+    the feed.
+    """
     base_url = context.config.pubsubhubbub_client.callback_url
     if not base_url.endswith('/'):
         base_url += '/'
     return urljoin(base_url, quote_plus(feed_url))
 
 def topic_url_for(feed):
+    """
+    for a given RemoteFeed, determine the 'topic url' that
+    is used to identify the feed to it's hubs.
+    """
     for link in feed.feed_info.get('links', []):
         if link.rel == 'self':
             return link.href
     return None
 
 def _determine_feed_url(req):
+    """
+    determine which feed url a callback from a hub
+    refers to.
+    """
     url = unquote_plus(req.path)
     if url.startswith('/'):
         url = url[1:]
     return url
 
 def hubbub_sub(feed, context, hub_url=None):
+    """
+    subscribe to feed on the pubsubhubbub hub 
+    specified or the first hub listed in the 
+    feed if none is given.
+    """
     topic_url = topic_url_for(feed)
     
     if topic_url is None:
@@ -77,14 +98,18 @@ def hubbub_sub(feed, context, hub_url=None):
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
         
 def hubbub_unsub(feed, context):
-
+    """
+    unsubscribe from feed on the current pubsubhubbub hub 
+    for the feed.
+    """
     topic_url = topic_url_for(feed)
     
     if topic_url is None:
         raise ValueError('No self link found in feed, cannot unsubscribe via pubsubhubub.')
 
-    if feed.hub_info.enabled == True:
-        feed.hub_info.enabled = False
+    # immediately mark the feed as unsubscribed.
+    if feed.hub_info.subscribed:
+        feed.hub_info.subscribed = False
         feed.save()
 
     cb = callback_url_for(feed.url, context)
@@ -99,6 +124,7 @@ def hubbub_unsub(feed, context):
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
+
 
 
 class WSGISubClient(object):
@@ -142,7 +168,7 @@ class WSGISubClient(object):
         mode = req.GET.get('hub.mode', None)
         topic = req.GET.get('hub.topic', None)
 
-        if self._is_valid_sub_request(req):
+        if self._validate_sub_request(req):
             log.info("Got valid '%s' req for '%s'" % (mode, topic))
             res.status = 200
             res.body = req.GET['hub.challenge']
@@ -152,7 +178,7 @@ class WSGISubClient(object):
             res.status = 404
         return res
 
-    def _is_valid_sub_request(self, req):
+    def _validate_sub_request(self, req):
         mode = req.GET.get('hub.mode', None)
         topic = req.GET.get('hub.topic', None)
         verify_token = req.GET.get('hub.verify_token', None)
@@ -163,8 +189,8 @@ class WSGISubClient(object):
 
         rf = RemoteFeed.get_by_url(url, self.context)
         if rf is None:
-            # confirm unsubscribes for feeds
-            # we don't have...
+            # for feeds we don't know about, confirm unsubscribes
+            # and reject subscribes.
             return mode == 'unsubscribe'
 
         if topic != topic_url_for(rf):
@@ -172,12 +198,41 @@ class WSGISubClient(object):
             return False
 
         if mode == 'subscribe':
-            return (rf.hub_info.enabled and
-                    rf.hub_info.verify_token == verify_token)
+            if (rf.hub_info.enabled and
+                rf.hub_info.verify_token == verify_token):
+                
+                try:
+                    lease_time = int(req.GET.get('hub.lease_seconds', DEFAULT_LEASE))
+                except:
+                    lease_time = DEFAULT_LEASE
+                     
+                lease_time = min(lease_time, 604800)
+                next_sub_time = datetime.utcnow() + timedelta(seconds=lease_time/2)
+                
+                # mark the feed as subscribed only when we have recieved 
+                # a proper subscription verification from the hub.
+                rf.hub_info.subscribed = True
+                rf.hub_info.next_sub_time = next_sub_time
+                rf.save()
+                return True
+            else:
+                return False
 
         elif mode == 'unsubscribe':
-            return (not rf.hub_info.enabled and
-                    rf.hub_info.verify_token == verify_token)
+            ps = rf.hub_info
+            if ps.enabled and ps.subscribed and verify_token == ps.verify_token:
+                """
+                deny any valid unsubscribe requests for enabled feeds
+                that we believe should be subscribed.
+                """
+                return False
+            # anything else we approve, invalid, disabled, unsubscribed.
+            return True
+
+
+        else:
+            log.warn("hub sent unknown sub mode: %s" % mode)
+            return False
 
     def handle_callback(self, req):
         self._handle_callback(req)
@@ -189,7 +244,7 @@ class WSGISubClient(object):
         url = _determine_feed_url(req)
         digest = req.headers.get('X-Hub-Signature', None)
         content = req.body
-        push_feed_index(url, content, self.context, digest=digest, from_hub=True)  
+        push_feed_index(url, content, self.context, digest=digest, from_hub=True)
 
 class WSGISubClientProcess(Component):
     implements(IWorkerProcess)
@@ -199,16 +254,64 @@ class WSGISubClientProcess(Component):
         w.run()
 
 class HubAutosubscriber(Component):
-    implements(PostIndexAction, IContextConfigurable)
+    """
+    Hook that runs after each feed index to try to keep 
+    feeds subscribed to appropriate pubsubhubbub hubs
+    when enabled.
+    """
+    implements(PostIndexAction)
 
     def feed_reindexed(self, feed, context):
-        if not feed.hub_info.enabled:
-            hubs = feed.find_hub_urls()
-            if len(hubs) > 0:
-                _sub_any(feed, hubs, self.context)
+        update_pubsub_state(feed, context)
 
-    def set_context(self, context):
-        self.context = context
+
+def update_pubsub_state(feed, context):
+    """
+    perform any (un/re)subscription needed based on the 
+    state of the feed given and currently listed 
+    hubs.
+    """
+    hubs = feed.find_hub_urls()
+    ps = feed.hub_info
+
+    # if pubsub is disabled for this feed
+    if not ps.enabled:
+        if ps.subscribed: 
+            try:
+                hubbub_unsub(feed, context)
+            except:
+                log.warn("Error unsubscribing from hub %s for feed %s: %s" % 
+                         (ps.hub_url, feed.url, traceback.format_exc()))  
+        return
+
+    # if the currently subscribed hub is no longer 
+    # listed in the feed, unsubscribe from it.
+    if ps.subscribed and ps.hub_url not in hubs:
+        try:
+            hubbub_unsub(feed, context)
+        except:
+            log.warn("Error unsubscribing from current hub: %s" % 
+                     traceback.format_exc())
+        feed = RemoteFeed.get(feed.id, context) # refresh
+
+    # if it is time to resubscribe to the current hub, try to 
+    # resubscribe
+    elif ps.subscribed and datetime.utcnow() > ps.next_sub_time: 
+        log.info('resubscribe %s to hub %s' % (feed.url, feed.hub_info.hub_url))
+        if not _sub_any(feed, [feed.hub_info.hub_url], context):
+            log.warn("Failed to resubscribe to %s for feed %s." % (ps.hub_url, feed.url))
+            try:
+                hubbub_unsub(feed, context)
+            except:
+                log.warn("Error unsubscribing from hub %s for feed %s: %s" % 
+                         (ps.hub_url, feed.url, traceback.format_exc()))  
+                feed = RemoteFeed.get(feed.id, context) # refresh
+
+    # if it is not subscribed, subscribe to first thing 
+    # that works.
+    if not ps.subscribed:
+        _sub_any(feed, hubs, context)                
+
 
 def _sub_any(feed, hubs, context):
     """
@@ -230,11 +333,13 @@ def _sub_any(feed, hubs, context):
             
             if r.status >= 200 and r.status < 300:
                 log.info("Subscribed to %s at hub %s (%d)" % (feed.url, hub, r.status))
-                return
+                return True
             else: 
                 log.info("Failed to subscribe to %s at hub %s (%d)" % (feed.url, hub, r.status))
         except: 
             log.error("Failed to subscribe to %s at hub %s: %s" % (feed.url, hub, traceback.format_exc()))
+            
+    return False
 
 class HubPushValidator(Component):
     """
@@ -249,7 +354,7 @@ class HubPushValidator(Component):
             return True
 
         content = request.get('content', '')
-        if not feed.hub_info.enabled:
+        if not feed.hub_info.enabled or feed.hub_info.subscribed == False:
             log.warn("Ignoring hub push for unsubscribed feed.")
             return False
 

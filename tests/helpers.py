@@ -63,7 +63,8 @@ def make_atom_feed(feed_id, entries,
                     title='Some Dummy Feed',
                     timestamp=None,
                     link='http://example.org/feed',
-                    author='Jane Dough'):
+                    author='Jane Dough',
+                    hub_urls=None):
     if timestamp is None:
         timestamp = datetime.utcnow()
     updated_str = rfc3339_date(timestamp)
@@ -78,6 +79,10 @@ def make_atom_feed(feed_id, entries,
         <name>%s</name>
       </author>
     """ % (feed_id, title, link, updated_str, author)
+
+    if hub_urls is not None:
+        for hub_url in hub_urls:
+            doc += '<link rel="hub" href="%s" />' % hub_url
 
     for entry in entries:
         doc += entry
