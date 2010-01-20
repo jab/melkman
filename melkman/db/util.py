@@ -44,6 +44,19 @@ class DocumentHelper(Document):
             instance.set_context(ctx)
             yield instance
 
+    @classmethod
+    def latest_rev_for_id(cls, id, ctx):
+        """
+        revision id of latest version of the
+        object specified saved in the database.
+        returns None if the object cannot be found.
+        """
+        try:
+            resp, data = ctx.db.resource.head(id)
+            return resp['etag'].strip('"')
+        except ResourceNotFound:
+            return None
+
     def load(self, db, id):
         raise NotImplementedError("Use get(id, context) instead.")
 
@@ -56,7 +69,7 @@ class DocumentHelper(Document):
     def delete(self):
         del self._context.db[self.id]
     
-    def reload(self):
+    def reload(self, newer_only=False):
         """
         re-get the object from the database, wiping out 
         any local changes. 
@@ -66,9 +79,23 @@ class DocumentHelper(Document):
         
         subclasses should override to wipe any local 
         storage associated with the state of the object.
+        
+        newer_only - if True, the object is only 
+        reloaded if the revision number of this object
+        differs from the latest version in the database.
         """
-        self._data = self._context.db[self.id]
+        if newer_only is False or self.get_latest_rev() != self.rev:
+            self._data = self._context.db[self.id]
     
+
+    def get_latest_rev(self):
+        """
+        fetch the revision id of latest version of this 
+        object saved in the database.
+        """
+        return self.latest_rev_for_id(self.id, self._context)
+
+
     
 SUPPORTED_BATCH_QUERY_ARGS = set(['startkey', 'endkey', 'skip', 'descending', 'include_docs', 'limit'])
 def batched_view_iter(db, view, batch_size, **kw):
