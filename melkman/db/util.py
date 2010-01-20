@@ -1,4 +1,4 @@
-from couchdb import ResourceConflict
+from couchdb import ResourceNotFound, ResourceConflict
 from couchdb.schema import Document, Schema, Field
 import random
 import time
