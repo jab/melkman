@@ -4,8 +4,7 @@ from helpers import *
 def test_deferred_in_database():
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     import logging
     from melk.util.nonce import nonce_str
     import sys
@@ -45,15 +44,13 @@ def test_deferred_in_database():
 def test_deferred_send_receive():
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
-    from eventlet.coros import event
+    from eventlet import sleep, spawn, with_timeout
+    from eventlet.event import Event
     import logging
     from melk.util.nonce import nonce_str
     import sys
 
     from melkman.context import Context
-    from melkman.green import timeout_wait
     from melkman.scheduler import defer_amqp_message, cancel_deferred
     from melkman.scheduler.worker import ScheduledMessageService
     from melkman.scheduler.worker import DeferredAMQPMessage, view_deferred_messages_by_timestamp
@@ -66,7 +63,7 @@ def test_deferred_send_receive():
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
 
-    got_message = event()
+    got_message = Event()
     def got_message_cb(*args, **kw):
         got_message.send(True)
     
@@ -92,7 +89,7 @@ def test_deferred_send_receive():
     wait = timedelta(seconds=2)
     defer_amqp_message(now + wait, m1, 'testq', 'testx', ctx)
 
-    timeout_wait(got_message, 10)
+    with_timeout(10, got_message.wait)
     assert got_message.ready()
     
     sched.kill()
@@ -101,10 +98,8 @@ def test_deferred_send_receive():
     
 def test_defer_event():
     from datetime import datetime, timedelta
-    from eventlet.api import sleep
-    from eventlet.coros import event
-    from eventlet.proc import spawn
-    from melkman.green import timeout_wait
+    from eventlet import sleep, spawn, with_timeout
+    from eventlet.event import Event
     from melkman.messaging import EventBus
     from melkman.scheduler import defer_event
     from melkman.scheduler.worker import ScheduledMessageService
@@ -115,7 +110,7 @@ def test_defer_event():
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
 
-    got_message = event()
+    got_message = Event()
     def got_message_cb(*args, **kw):
         got_message.send(True)
     
@@ -130,7 +125,7 @@ def test_defer_event():
     sleep(3)
 
     try:
-        timeout_wait(got_message, 10)
+        with_timeout(10, got_message.wait)
         assert got_message.ready()
     finally:
         eb.kill()
@@ -138,10 +133,8 @@ def test_defer_event():
     
 def test_defer_message_dispatch():
     from datetime import datetime, timedelta
-    from eventlet.api import sleep
-    from eventlet.coros import event
-    from eventlet.proc import spawn
-    from melkman.green import timeout_wait
+    from eventlet import sleep, spawn, with_timeout
+    from eventlet.event import Event
     from melkman.messaging import MessageDispatch, always_ack
     from melkman.scheduler import defer_message
     from melkman.scheduler.worker import ScheduledMessageService
@@ -153,7 +146,7 @@ def test_defer_message_dispatch():
     
     message_type = 'test_dispatch_send_recv'
     
-    work_result = event()
+    work_result = Event()
     
     @always_ack
     def handler(job, message):
@@ -168,12 +161,8 @@ def test_defer_message_dispatch():
         defer_message(now + wait, {'values': [1 ,2]}, message_type, ctx)
         sleep(3)
     
-        assert timeout_wait(work_result, 2) == 3
+        assert with_timeout(2, work_result.wait) == 3
     finally:
         worker.kill()
         sched.kill()
 
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    test_deferred_send_receive()

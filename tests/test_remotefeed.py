@@ -69,7 +69,7 @@ def test_get_or_immediate_create_by_url():
     if they in fact exist, and creates them if they don't.
     """
     from datetime import datetime, timedelta
-    from eventlet.api import sleep
+    from eventlet import sleep
     from melkman.db.remotefeed import RemoteFeed, get_or_immediate_create_by_url
     ctx = fresh_context()
 

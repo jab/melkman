@@ -1,7 +1,7 @@
 import logging
 from giblets import Component, implements
 from datetime import datetime, timedelta
-from eventlet.api import tcp_listener
+from eventlet.green import socket
 from eventlet.wsgi import server as wsgi_server
 import hmac
 from httplib2 import Http
@@ -136,10 +136,21 @@ class WSGISubClient(object):
         self.context = context
 
     def run(self):
-        host = self.context.config.pubsubhubbub_client.host
-        port = int(self.context.config.pubsubhubbub_client.port)
-        log.info("WSGISubClient starting on %s:%d" % (host, port))
-        wsgi_server(tcp_listener((host, port)), self)
+        try:
+            host = self.context.config.pubsubhubbub_client.host
+            port = int(self.context.config.pubsubhubbub_client.port)
+            log.info("WSGISubClient starting on %s:%d" % (host, port))
+            server = socket.socket()
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((host, port))
+            server.listen(50)
+            wsgi_server(server, self)
+        except GreenletExit: 
+            pass
+        except: 
+            log.error("Unexpected error running WSGISubClient: %s" % traceback.format_exc())
+        finally: 
+            context.close()
 
     def __call__(self, environ, start_response):
         try:
@@ -151,7 +162,7 @@ class WSGISubClient(object):
                 res = self.handle_sub_verification(req)
             else:
                 res = Response()
-                res.status = 400    
+                res.status = 400
         except:
             log.error("Error handling PubSubHubBub request: %s" % traceback.format_exc())
             res = Response()
@@ -252,6 +263,7 @@ class WSGISubClientProcess(Component):
     def run(self, context):
         w = WSGISubClient(context)
         w.run()
+
 
 class HubAutosubscriber(Component):
     """

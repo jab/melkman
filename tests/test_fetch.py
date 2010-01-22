@@ -14,9 +14,7 @@ def test_index_request():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import request_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
-
+    from eventlet import sleep, spawn
     
     ctx = fresh_context()
     
@@ -43,7 +41,10 @@ def test_index_request():
         
     finally:
         indexer.kill()
+        indexer.wait()
         ts_proc.kill()
+        ts_proc.wait()
+        ctx.close()
 
 
 def test_schedule_index():
@@ -51,8 +52,7 @@ def test_schedule_index():
     from melkman.fetch import schedule_feed_index
     from melkman.fetch.worker import run_feed_indexer
     from melkman.scheduler.worker import ScheduledMessageService
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     
     ctx = fresh_context()
     
@@ -86,31 +86,36 @@ def test_schedule_index():
         log.error("error: %s" % traceback.format_exc())
     finally:
         indexer.kill()
+        indexer.wait()
         sched.kill()
+        sched.wait()
         ts_proc.kill()
+        ts_proc.wait()
+        ctx.close()
             
 def test_push_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     
     ctx = fresh_context()
     
     # start a feed indexer
     indexer = spawn(run_feed_indexer, ctx)
     
-    url = 'http://www.example.com/feeds/2'
-    content = random_atom_feed(url, 10)
-    ids = melk_ids_in(content, url)
+    try:
+        url = 'http://www.example.com/feeds/2'
+        content = random_atom_feed(url, 10)
+        ids = melk_ids_in(content, url)
     
-    push_feed_index(url, content, ctx)
-    sleep(.5)
+        push_feed_index(url, content, ctx)
+        sleep(.5)
     
-    rf = RemoteFeed.get_by_url(url, ctx)
-    for iid in ids:
-        assert iid in rf.entries
-
-    indexer.kill()    
-
+        rf = RemoteFeed.get_by_url(url, ctx)
+        for iid in ids:
+            assert iid in rf.entries
+    finally:
+        indexer.kill()    
+        indexer.wait()
+        ctx.close()

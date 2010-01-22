@@ -18,11 +18,15 @@
 # USA
 
 from carrot.messaging import Publisher, Consumer
-from eventlet.coros import event
-from eventlet.proc import spawn, waitall, ProcExit
+from eventlet import spawn
+from eventlet.event import Event
+from eventlet.support.greenlets import GreenletExit
+
 import logging
 import traceback
 from uuid import uuid1
+
+from melkman.green import waitall
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +40,14 @@ def consumer_loop(make_consumer, context):
         it = consumer.iterconsume()
         while it.next():
             pass
-    except ProcExit:
+    except GreenletExit:
         log.debug("consumer_loop: killed")
     finally:
-        if consumer:
-            consumer.close()
+        try:
+            if consumer and not consumer.connection._closed:
+                consumer.close()
+        except:
+            log.error("error closing consumer: %s" % traceback.format_exc())
         context.close()
 
 def _exchange_for_channel(channel):
@@ -102,7 +109,7 @@ class EventBus(object):
         consumer.register_callback(cb)
 
     def _start_consumer(self, channel):
-        ready = event()
+        ready = Event()
         def make_consumer(ctx):
             consumer = EventConsumer(channel, ctx)
             self._consumers[channel] = consumer
@@ -253,7 +260,7 @@ class pooled(object):
         
     def __call__(self, callback):
         def cb(message_data, message):
-            return self.pool.execute(callback, message_data, message)
+            return self.pool.spawn(callback, message_data, message)
         return cb
 
 
@@ -268,6 +275,9 @@ def always_ack(handler):
         try:
             handler(message_data, message)
         finally:
-            if not message.acknowledged:
-                message.ack()
+            if not message.acknowledged and not message.backend.connection._closed:
+                try:
+                    message.ack()
+                except: 
+                    log.error("Failed to ack message %s: %s" % (message_data, traceback.format_exc()))
     return wrap_handler

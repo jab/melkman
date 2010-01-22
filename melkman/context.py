@@ -66,6 +66,8 @@ class Context(object):
         except KeyError:
             pass
 
+    def __del__(self):
+        self.close()
 
     def __enter__(self):
         return self

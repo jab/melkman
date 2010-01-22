@@ -22,6 +22,8 @@ def test_get_by_ids():
     foo1, foo2 = Foo.get_by_ids((foo1.id, foo2.id), ctx)
     assert foo1.i == 1 and foo2.i == 2
     assert foo1.flag and foo2.flag
+    
+    ctx.close()
 
 def test_db_util_doctest():
     import doctest

@@ -6,8 +6,7 @@ import logging
 log = logging.getLogger(__name__)
 
 def test_modified_updates_composite():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
@@ -78,11 +77,11 @@ def test_modified_updates_composite():
     assert not c[2].has_news_item(id3)
 
     agg.kill()
+    agg.wait()
     ctx.close()
     
 def test_sub_loop_sane():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
@@ -128,12 +127,12 @@ def test_sub_loop_sane():
     sleep(1)
 
     agg.kill()
+    agg.wait()
     ctx.close()
 
 
 def test_init_subscription():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
@@ -162,4 +161,5 @@ def test_init_subscription():
         assert c.has_news_item(eid)
 
     agg.kill()
+    agg.wait()
     ctx.close()

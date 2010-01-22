@@ -2,7 +2,8 @@ from melkman.green import green_init
 green_init()
 
 from datetime import datetime, timedelta
-from eventlet.api import tcp_listener
+from eventlet.green import socket
+from eventlet.support.greenlets import GreenletExit
 from eventlet.wsgi import server as wsgi_server
 import os
 import time
@@ -147,7 +148,14 @@ class TestHTTPServer(object):
         self.port = port
 
     def run(self):
-        wsgi_server(tcp_listener(('127.0.0.1', self.port)), self)
+        try:
+            server = socket.socket()
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind(('127.0.0.1', self.port))
+            server.listen(50)
+            wsgi_server(server, self)
+        except GreenletExit:
+            pass
 
     def __call__(self, environ, start_response):
         res = Response()

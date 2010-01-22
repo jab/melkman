@@ -23,6 +23,8 @@ def test_context_bootstrap_plugins():
     ctx.bootstrap(purge=False)
     
     assert FooComponent.did_bootstrap == 1
+
+    ctx.close()
     
 def test_context_components():
 
@@ -68,3 +70,5 @@ def test_context_components():
 
     # check that the component was configured with the context
     assert bazer.bazoo[0].context == ctx
+
+    ctx.close()

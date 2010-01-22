@@ -108,7 +108,7 @@ class FakeHub(TestHTTPServer):
 
 def test_sub_verify():
     from httplib2 import Http
-    from eventlet.proc import spawn
+    from eventlet import spawn
     from melk.util.nonce import nonce_str
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
@@ -192,8 +192,7 @@ def test_sub_verify():
 
 def test_sub_push():
     from httplib2 import Http
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melk.util.nonce import nonce_str
     from melkman.db import RemoteFeed
     from melkman.fetch.worker import run_feed_indexer
@@ -276,8 +275,7 @@ def test_sub_to_hub():
     """
     
     from httplib2 import Http
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melk.util.nonce import nonce_str
     import traceback
 
@@ -362,8 +360,7 @@ def test_auto_sub():
     # tests autosubscription when feeds are indexed 
     # with <link rel="hub" /> entries. 
     from datetime import datetime
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
@@ -417,8 +414,7 @@ def test_push_index_digest():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.worker import run_feed_indexer
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.fetch.pubsubhubbub import psh_digest
 
     ctx = fresh_context()
@@ -492,8 +488,7 @@ def test_disabled_unsubscribes():
     feed, it becomes unsubscribed from it's 
     hub.
     """
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
@@ -545,8 +540,7 @@ def test_hub_invalidation():
     no longer listed by a feed unsubscription is 
     performed.
     """
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
@@ -599,8 +593,7 @@ def test_hub_invalidation_resub():
     no longer listed, we subscribe to a different
     hub if any are listed.
     """
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
@@ -662,8 +655,7 @@ def test_hub_lease_renew():
     tests that we resubscribe with a hub 
     within the hub specified lease window.
     """
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
@@ -711,8 +703,7 @@ def test_hub_lease_renew_failover():
     tests that if we fail to renew a lease with a hub 
     we will failover to a different hub if one is available.
     """
-    from eventlet.api import sleep
-    from eventlet.proc import spawn
+    from eventlet import sleep, spawn
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
