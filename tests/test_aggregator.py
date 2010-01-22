@@ -5,6 +5,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
+@check_leaks
 def test_modified_updates_composite():
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
@@ -79,7 +80,8 @@ def test_modified_updates_composite():
     agg.kill()
     agg.wait()
     ctx.close()
-    
+
+@check_leaks
 def test_sub_loop_sane():
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
@@ -130,7 +132,7 @@ def test_sub_loop_sane():
     agg.wait()
     ctx.close()
 
-
+@check_leaks
 def test_init_subscription():
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator

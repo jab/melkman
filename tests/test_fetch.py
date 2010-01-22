@@ -9,7 +9,7 @@ import traceback
 
 log = logging.getLogger(__name__)
 
-
+@check_leaks
 def test_index_request():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import request_feed_index
@@ -46,7 +46,7 @@ def test_index_request():
         ts_proc.wait()
         ctx.close()
 
-
+@check_leaks
 def test_schedule_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import schedule_feed_index
@@ -92,7 +92,8 @@ def test_schedule_index():
         ts_proc.kill()
         ts_proc.wait()
         ctx.close()
-            
+
+@check_leaks            
 def test_push_index():
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
@@ -116,6 +117,6 @@ def test_push_index():
         for iid in ids:
             assert iid in rf.entries
     finally:
-        indexer.kill()    
+        indexer.kill()
         indexer.wait()
         ctx.close()

@@ -248,6 +248,7 @@ def run_feed_indexer(context):
         # stop working on existing work
         worker_pool.killall()
         worker_pool.waitall()
+        context.close()
 
 class FeedIndexerProcess(Component):
     implements(IWorkerProcess)

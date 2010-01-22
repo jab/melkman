@@ -3,6 +3,7 @@ from giblets import Component, implements
 from datetime import datetime, timedelta
 from eventlet.green import socket
 from eventlet.wsgi import server as wsgi_server
+from eventlet.support.greenlets import GreenletExit
 import hmac
 from httplib2 import Http
 import traceback
@@ -112,6 +113,10 @@ def hubbub_unsub(feed, context):
         feed.hub_info.subscribed = False
         feed.save()
 
+    # hub unknown, skip POST
+    if feed.hub_info.hub_url is None:
+        return
+
     cb = callback_url_for(feed.url, context)
     req = [
         ('hub.callback', cb),
@@ -124,7 +129,6 @@ def hubbub_unsub(feed, context):
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
-
 
 
 class WSGISubClient(object):
@@ -150,7 +154,7 @@ class WSGISubClient(object):
         except: 
             log.error("Unexpected error running WSGISubClient: %s" % traceback.format_exc())
         finally: 
-            context.close()
+            self.context.close()
 
     def __call__(self, environ, start_response):
         try:

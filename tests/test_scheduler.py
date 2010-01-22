@@ -1,6 +1,6 @@
 from helpers import *
 
-
+@check_leaks
 def test_deferred_in_database():
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
@@ -30,6 +30,7 @@ def test_deferred_in_database():
     # give it a sec to write it out, then close it down.
     sleep(1)
     sched.kill()
+    sched.wait()
     
     # check the database for the message we sent
     count = 0
@@ -41,11 +42,17 @@ def test_deferred_in_database():
         assert message.timestamp == when
     assert count == 1
 
+    ctx.close()
+
+
+
+@check_leaks
 def test_deferred_send_receive():
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
     from eventlet import sleep, spawn, with_timeout
     from eventlet.event import Event
+    from eventlet.support.greenlets import GreenletExit
     import logging
     from melk.util.nonce import nonce_str
     import sys
@@ -53,20 +60,13 @@ def test_deferred_send_receive():
     from melkman.context import Context
     from melkman.scheduler import defer_amqp_message, cancel_deferred
     from melkman.scheduler.worker import ScheduledMessageService
-    from melkman.scheduler.worker import DeferredAMQPMessage, view_deferred_messages_by_timestamp
-
 
     ctx = fresh_context()
-
-    from melkman.scheduler.worker import ScheduledMessageService
-
-    sms = ScheduledMessageService(ctx)
-    sched = spawn(sms.run)
 
     got_message = Event()
     def got_message_cb(*args, **kw):
         got_message.send(True)
-    
+
     def do_consume():
         consumer = Consumer(ctx.broker, exchange='testx', queue='testq', 
                             routing_key='testq', exclusive=True, durable=False)
@@ -74,6 +74,8 @@ def test_deferred_send_receive():
         try:
             consumer.wait(limit=1)
         except StopIteration:
+            pass
+        except GreenletExit:
             pass
         finally:
             consumer.close()
@@ -83,19 +85,24 @@ def test_deferred_send_receive():
 
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
-    
+
     m1 = {'hello': 'world'}
     now = datetime.utcnow()
     wait = timedelta(seconds=2)
     defer_amqp_message(now + wait, m1, 'testq', 'testx', ctx)
 
-    with_timeout(10, got_message.wait)
-    assert got_message.ready()
-    
-    sched.kill()
-    cons.kill()
-    ctx.close()
-    
+    try:
+        #sleep(1)
+        with_timeout(10, got_message.wait)
+        assert got_message.ready()
+    finally:
+        sched.kill()
+        sched.wait()
+        cons.kill()
+        cons.wait()
+        ctx.close()
+
+@check_leaks
 def test_defer_event():
     from datetime import datetime, timedelta
     from eventlet import sleep, spawn, with_timeout
@@ -130,7 +137,10 @@ def test_defer_event():
     finally:
         eb.kill()
         sched.kill()
-    
+        sched.wait()
+        ctx.close()
+
+@check_leaks
 def test_defer_message_dispatch():
     from datetime import datetime, timedelta
     from eventlet import sleep, spawn, with_timeout
@@ -164,5 +174,8 @@ def test_defer_message_dispatch():
         assert with_timeout(2, work_result.wait) == 3
     finally:
         worker.kill()
+        worker.wait()
         sched.kill()
+        sched.wait()
+        ctx.close()
 

@@ -39,4 +39,10 @@ class Pool(GreenPool):
     
     def killall(self):
         killall(self.coroutines_running)
-
+        
+    def waitall(self):
+        # nothing to wait for...
+        if self.sem.balance == self.size:
+            return
+        else:
+            self.no_coros_running.wait()

@@ -1,5 +1,6 @@
 from helpers import *
 
+@check_leaks
 def test_event_send_receive():
     from eventlet import sleep
     from melkman.messaging import EventBus
@@ -23,7 +24,8 @@ def test_event_send_receive():
     finally:
         event_bus.kill()
         ctx.close()
-        
+
+@check_leaks
 def test_event_multiple_listeners():
     from eventlet import sleep
     from melkman.messaging import EventBus
@@ -54,6 +56,7 @@ def test_event_multiple_listeners():
         event_bus.kill()
         ctx.close()
 
+@check_leaks
 def test_event_multiple_consumers():
     from eventlet import sleep
     from melkman.messaging import EventBus
@@ -95,6 +98,7 @@ def test_event_multiple_consumers():
         event_bus2.kill()
         ctx.close()
 
+@check_leaks
 def test_event_multiple_channels():
     from eventlet import sleep
     from melkman.messaging import EventBus
@@ -131,6 +135,7 @@ def test_event_multiple_channels():
         event_bus.kill()
         ctx.close()
 
+@check_leaks
 def test_dispatch_send_recv():
     from eventlet import with_timeout
     from eventlet.event import Event
@@ -153,8 +158,10 @@ def test_dispatch_send_recv():
         assert with_timeout(2, work_result.wait) == 3
     finally:
         worker.kill()
+        worker.wait()
         ctx.close()
 
+@check_leaks
 def test_dispatch_one_receiver():
     from eventlet import sleep
     from eventlet.event import Event

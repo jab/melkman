@@ -148,6 +148,7 @@ class ScheduledMessageService(object):
         finally:
             killall(procs)
             waitall(procs)
+            self.context.close()
 
     ################################################################
     # The listener consumes messages on the scheduled message queue 
@@ -189,7 +190,8 @@ class ScheduledMessageService(object):
                 if self.service_queue.ready():
                     self.service_queue.reset()
         except GreenletExit:
-            pass
+            log.debug("ScheduledMessageService dispatcher exiting...")
+            self.context.close()
 
     def wakeup_dispatcher(self):
         if not self.service_queue.ready():

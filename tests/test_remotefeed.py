@@ -22,7 +22,7 @@ import time
 
 from helpers import *
 
-
+@check_leaks
 def test_update_feed_repeat_index():
     """
     test that indexing the same content twice has no effect
@@ -62,7 +62,9 @@ def test_update_feed_repeat_index():
     updates = feed.update_from_feed(content, method='test')
     assert updates == 0
 
-
+    ctx.close()
+    
+@check_leaks
 def test_get_or_immediate_create_by_url():
     """
     test that get_or_immediate_create_by_url retrieves existing feeds by url
@@ -93,7 +95,9 @@ def test_get_or_immediate_create_by_url():
     assert samefeed.last_modification_date == feed.last_modification_date
     assert now - samefeed.last_modification_date >= timedelta(seconds=1)
 
+    ctx.close()
 
+@check_leaks
 def test_update_feed_partial_repeat():
     """
     test that indexing the some of same content twice only 
@@ -138,9 +142,10 @@ def test_update_feed_partial_repeat():
     # make sure all the items are in the feed
     for iid in expect_ids:
         assert feed.has_news_item(iid)
+    
+    ctx.close()
 
-
-
+@check_leaks
 def test_item_trace_update():
     from melkman.db import NewsItem, RemoteFeed
     ctx = fresh_context()
@@ -195,7 +200,9 @@ def test_item_trace_update():
     feed.update_from_feed(feed_v3, method='test')
     feed.save()
     check_item(feed, melk_id, info3)
+    ctx.close()
 
+@check_leaks
 def test_view_bucket_entries_by_timestamp():
     from melkman.db import NewsBucket, NewsItemRef
     from melkman.db.bucket import view_entries_by_timestamp
@@ -234,7 +241,10 @@ def test_view_bucket_entries_by_timestamp():
     assert len(sorted_items) == 100
     for i, item in enumerate(sorted_items):
         assert item.item_id == items[i][0]
-        
+    
+    ctx.close()
+
+@check_leaks
 def test_delete():
     from melkman.db import RemoteFeed, NewsItem, NewsItemRef
     ctx = fresh_context()
@@ -266,7 +276,10 @@ def test_delete():
         assert not ref_id in ctx.db
     for iid in items:
         assert not iid in ctx.db
+    
+    ctx.close()
 
+@check_leaks
 def test_max_history_len():
     from melkman.db.remotefeed import RemoteFeed, MAX_HISTORY
     ctx = fresh_context()
@@ -282,3 +295,4 @@ def test_max_history_len():
         else:
             assert len(rf.update_history) == MAX_HISTORY
         assert rf.update_history[0].reason == reason
+    ctx.close()

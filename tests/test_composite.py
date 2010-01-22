@@ -1,11 +1,14 @@
 from helpers import *
 
+@check_leaks
 def test_create_composite():
     from melkman.db.composite import Composite
     ctx = fresh_context()
     cc = Composite.create(ctx)
     cc.save()
+    ctx.close()
 
+@check_leaks
 def test_composites_by_sub():
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite, view_composites_by_subscription
@@ -52,6 +55,9 @@ def test_composites_by_sub():
     for r in view_composites_by_subscription(ctx.db, include_docs=True, startkey=bucket3.id, endkey=bucket3.id):
         assert False, 'unexpected subscription'
 
+    ctx.close()
+
+@check_leaks
 def test_composite_subs_by_title():
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite, view_composite_subscriptions_by_title
@@ -79,7 +85,9 @@ def test_composite_subs_by_title():
     for i, row in enumerate(view_composite_subscriptions_by_title(ctx.db, startkey=[cc.id, None], endkey=[cc.id, {}])):
         assert row.value['bucket_id'] == buckets[i].id
     assert i + 1 == len(buckets)
+    ctx.close()
 
+@check_leaks
 def test_composite_filtered_update():
     from melkman.db.composite import Composite
     from random import shuffle
@@ -126,4 +134,5 @@ def test_composite_filtered_update():
 
     for item in not_ok_items:
         assert not cc.has_news_item(item)
-
+    
+    ctx.close()

@@ -1,7 +1,7 @@
 import os
 from helpers import *
 
-
+@check_leaks
 def test_context_bootstrap_plugins():
     from giblets import Component, implements
     from melkman.context import Context, IRunDuringBootstrap
@@ -26,6 +26,7 @@ def test_context_bootstrap_plugins():
 
     ctx.close()
     
+@check_leaks
 def test_context_components():
 
     from giblets import Component, implements, ExtensionInterface, ExtensionPoint

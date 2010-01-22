@@ -106,6 +106,7 @@ class FakeHub(TestHTTPServer):
     def renewals(self, cb, topic_url):
         return self._renewals.get((cb, topic_url), 0)
 
+@check_leaks
 def test_sub_verify():
     from httplib2 import Http
     from eventlet import spawn
@@ -189,7 +190,10 @@ def test_sub_verify():
     assert c == challenge, 'expected %s, got %s' % (challence, c)
     
     client.kill()
+    client.wait()
+    ctx.close()
 
+@check_leaks
 def test_sub_push():
     from httplib2 import Http
     from eventlet import sleep, spawn
@@ -267,8 +271,12 @@ def test_sub_push():
         assert iid in rf.entries 
     
     client.kill()
+    client.wait()
     indexer.kill()
-    
+    indexer.wait()
+    ctx.close()
+
+@check_leaks
 def test_sub_to_hub():
     """
     test make_sub_request and make_unsub_request
@@ -353,9 +361,14 @@ def test_sub_to_hub():
         assert not iid in rf.entries
         
     client.kill()
+    client.wait()
     indexer.kill()
+    indexer.wait()
     hub_proc.kill()
+    hub_proc.wait()
+    ctx.close()
 
+@check_leaks
 def test_auto_sub():
     # tests autosubscription when feeds are indexed 
     # with <link rel="hub" /> entries. 
@@ -405,10 +418,14 @@ def test_auto_sub():
     assert rf.hub_info.hub_url == hub_url
 
     client.kill()
+    client.wait()
     indexer.kill()
+    indexer.wait()
     hub_proc.kill()
+    hub_proc.wait()
+    ctx.close()
     
-
+@check_leaks
 def test_push_index_digest():
     from melk.util.nonce import nonce_str
     from melkman.db.remotefeed import RemoteFeed
@@ -481,7 +498,10 @@ def test_push_index_digest():
         assert iid in rf.entries
 
     indexer.kill()
+    indexer.wait()
+    ctx.close()
 
+@check_leaks
 def test_disabled_unsubscribes():
     """
     tests that if pubsub is disabled for a 
@@ -532,8 +552,12 @@ def test_disabled_unsubscribes():
     assert rf.hub_info.enabled == False and rf.hub_info.subscribed == False
     
     client.kill()
+    client.wait()
     hub_proc.kill()
+    hub_proc.wait()
+    ctx.close()
 
+@check_leaks
 def test_hub_invalidation():
     """
     tests that if a currently subscribed hub is 
@@ -583,10 +607,12 @@ def test_hub_invalidation():
     assert rf.hub_info.enabled == True and rf.hub_info.subscribed == False
     
     client.kill()
+    client.wait()
     hub_proc.kill()
-
+    hub_proc.wait()
+    ctx.close()
     
-    
+@check_leaks
 def test_hub_invalidation_resub():
     """
     tests that if a currently subscribed hub is 
@@ -646,10 +672,14 @@ def test_hub_invalidation_resub():
     assert rf.hub_info.enabled == True and rf.hub_info.subscribed == True
     
     client.kill()
+    client.wait()
     hub_proc.kill()
+    hub_proc.wait()
     hub2_proc.kill()
+    hub2_proc.wait()
+    ctx.close()
     
-
+@check_leaks
 def test_hub_lease_renew():
     """
     tests that we resubscribe with a hub 
@@ -695,9 +725,12 @@ def test_hub_lease_renew():
     assert hub.renewals(cb, feed_url) == 1
 
     client.kill()
+    client.wait()
     hub_proc.kill()
+    hub_proc.wait()
+    ctx.close()
 
-    
+@check_leaks    
 def test_hub_lease_renew_failover():
     """
     tests that if we fail to renew a lease with a hub 
@@ -760,4 +793,7 @@ def test_hub_lease_renew_failover():
     assert hub2.is_verified(cb, feed_url)
 
     client.kill()
+    client.wait()
     hub2_proc.kill()
+    hub2_proc.wait()
+    ctx.close()

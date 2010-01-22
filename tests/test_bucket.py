@@ -22,6 +22,7 @@ import time
 
 from helpers import *
 
+@check_leaks
 def test_bucket_add_remove():
     """
     test adding and removing a single item from a bucket
@@ -52,6 +53,9 @@ def test_bucket_add_remove():
     bucket.reload()
     assert not bucket.has_news_item(item_id)
     
+    ctx.close()
+    
+@check_leaks
 def test_bucket_silent_nodupes():
     """
     tests that calling add_news_item with the 
@@ -84,6 +88,9 @@ def test_bucket_silent_nodupes():
     bucket.remove_news_item(item_id)
     assert not bucket.has_news_item(item_id)
 
+    ctx.close()
+
+@check_leaks
 def test_bucket_overwrite_item():
     """
     test semantics of updating an item
@@ -154,6 +161,9 @@ def test_bucket_overwrite_item():
             count += 1    
     assert count == 1
     
+    ctx.close()
+
+@check_leaks
 def test_bucket_save_twice():
     from melkman.db import NewsBucket
     ctx = fresh_context()
@@ -161,7 +171,10 @@ def test_bucket_save_twice():
     bucket = NewsBucket.create(ctx, random_id())
     bucket.save()
     bucket.save()
-    
+
+    ctx.close()
+
+@check_leaks
 def test_add_before_save_no_id():
     from melkman.db import NewsBucket
     ctx = fresh_context()
@@ -171,7 +184,10 @@ def test_add_before_save_no_id():
     bucket.save()
     bucket.reload()
     assert bucket.has_news_item('abc')
+    
+    ctx.close()
 
+@check_leaks
 def test_add_from_ref():
     from melkman.db import NewsBucket, NewsItemRef
     ctx = fresh_context()
@@ -187,7 +203,9 @@ def test_add_from_ref():
     bucket2.save()
     bucket2.reload()
     assert bucket.has_news_item('abc')
+    ctx.close()
 
+@check_leaks
 def test_bucket_delete():
     from melkman.db import NewsBucket, NewsItemRef
     ctx = fresh_context()
@@ -213,6 +231,9 @@ def test_bucket_delete():
     for ref_id in ref_ids:
         assert not ref_id in ctx.db
 
+    ctx.close()
+
+@check_leaks
 def test_immediate_add():
     from melkman.db.bucket import NewsBucket, immediate_add, view_entries
     ctx = fresh_context()
@@ -242,7 +263,9 @@ def test_immediate_add():
     for item in items:
         assert bucket.has_news_item(item)
 
+    ctx.close()
 
+@check_leaks
 def test_bucket_conflict_does_not_stop_item_additions():
     """
     This tests that item additions succeed independently from 
@@ -294,8 +317,10 @@ def test_bucket_conflict_does_not_stop_item_additions():
         assert iid in b3.entries
     for iid in items2:
         assert iid in b3.entries
+    
+    ctx.close()
 
-
+@check_leaks
 def test_bucket_maxlen():
     """
     Test that bucket with maxlen behaves as expected
@@ -364,8 +389,9 @@ def test_bucket_maxlen():
     for i in items:
         bucket.add_news_item(i)
     bucket = check_before_and_after_save(bucket)
+    ctx.close()
 
-
+@check_leaks
 def test_direct_entries_access():
     from melkman.db.bucket import NewsBucket, NewsItemRef
     ctx = fresh_context()
@@ -423,3 +449,4 @@ def test_direct_entries_access():
     bucket.save()
     bucket.reload()
     assert len(bucket.entries) == 1
+    ctx.close()
