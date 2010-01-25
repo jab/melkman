@@ -216,7 +216,7 @@ class WSGISubClient(object):
                 except:
                     lease_time = DEFAULT_LEASE
                      
-                lease_time = min(lease_time, 604800)
+                lease_time = min(lease_time, DEFAULT_LEASE)
                 next_sub_time = datetime.utcnow() + timedelta(seconds=lease_time/2)
                 
                 # mark the feed as subscribed only when we have recieved 
