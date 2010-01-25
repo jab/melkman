@@ -90,10 +90,6 @@ class Context(object):
         self._local.refcount = val
     _refcount = property(_get_refcount, _set_refcount)
 
-    def __del__(self):
-        # destroy local storage for all greenlets
-        self._local = green_local()
-        self._shared_close()
 
     def _close(self):
         self._local_close()
