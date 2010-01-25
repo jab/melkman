@@ -34,21 +34,21 @@ __all__ = ['EventBus', 'MessageDispatch']
 
 
 def consumer_loop(make_consumer, context):
-    consumer = None
-    try:
-        consumer = make_consumer(context)
-        it = consumer.iterconsume()
-        while it.next():
-            pass
-    except GreenletExit:
-        log.debug("consumer_loop: killed")
-    finally:
+    with context:
+        consumer = None
         try:
-            if consumer and not consumer.connection._closed:
-                consumer.close()
-        except:
-            log.error("error closing consumer: %s" % traceback.format_exc())
-        context.close()
+            consumer = make_consumer(context)
+            it = consumer.iterconsume()
+            while it.next():
+                pass
+        except GreenletExit:
+            log.debug("consumer_loop: killed")
+        finally:
+            try:
+                if consumer and not consumer.connection._closed:
+                    consumer.close()
+            except:
+                log.error("error closing consumer: %s" % traceback.format_exc())
 
 def _exchange_for_channel(channel):
     return 'eventbus.%s' % channel

@@ -5,14 +5,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-@check_leaks
-def test_modified_updates_composite():
+@contextual
+def test_modified_updates_composite(ctx):
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
     
     b = []
@@ -79,16 +78,15 @@ def test_modified_updates_composite():
 
     agg.kill()
     agg.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_sub_loop_sane():
+@contextual
+def test_sub_loop_sane(ctx):
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
 
     # create two composites and subscribe them 
@@ -130,16 +128,15 @@ def test_sub_loop_sane():
 
     agg.kill()
     agg.wait()
-    ctx.close()
 
-@check_leaks
-def test_init_subscription():
+
+@contextual
+def test_init_subscription(ctx):
     from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
 
     c = Composite.create(ctx)
@@ -164,4 +161,4 @@ def test_init_subscription():
 
     agg.kill()
     agg.wait()
-    ctx.close()
+    

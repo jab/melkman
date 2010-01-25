@@ -19,8 +19,10 @@ from melkman.context import Context
 
 __all__ = ['make_db', 'fresh_context', 'data_path', 'test_yaml_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
-           'append_param', 'no_micro', 'TestHTTPServer', 'FileServer', 'check_leaks']
+           'append_param', 'no_micro', 'TestHTTPServer', 'FileServer', 'contextual']
 
+
+_last_context = None
 
 def data_path():
     here = os.path.abspath(os.path.dirname(__file__))
@@ -37,8 +39,11 @@ def make_db():
 def fresh_context():
     ctx = Context.from_yaml(test_yaml_file())
     ctx.bootstrap(purge=True)
-    return ctx
     
+    global _last_context
+    _last_context = ctx
+    return ctx
+
 def random_id():
     return melk_id(nonce_str())
 
@@ -203,14 +208,18 @@ def append_param(url, k, v):
     else: 
         return '%s?%s=%s' % (url, quote_plus(k), quote_plus(v))
 
-def check_leaks(t):
+def contextual(t):
     from eventlet import sleep
     from greenamqp.client_0_8 import connection
     connection.DEBUG_LEAKS = True
     def inner():
         start_connections = connection.connection_count
-        rc = t()
+        ctx = fresh_context()
+        with ctx:
+            rc = t(ctx)
         sleep(0)
+        assert len(ctx._locals_by_greenlet) == 0, 'Leaked %d greenlet storages' % len(ctx._locals_by_greenlet)
+        assert ctx._broker is None, 'Broker connection was not closed.'
         end_connections = connection.connection_count
         assert start_connections == end_connections, 'Leaked %d amqp connections (%d leaked in total)' % (end_connections - start_connections, end_connections)
         return rc

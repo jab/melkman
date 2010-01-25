@@ -67,7 +67,7 @@ def hubbub_sub(feed, context, hub_url=None):
     feed if none is given.
     """
     topic_url = topic_url_for(feed)
-    
+
     if topic_url is None:
         raise ValueError('No self link found in feed, cannot subscribe via pubsubhubub.')
 
@@ -97,7 +97,7 @@ def hubbub_sub(feed, context, hub_url=None):
     body = urlencode(req)
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     return Http().request(feed.hub_info.hub_url, method="POST", body=body, headers=headers)
-        
+
 def hubbub_unsub(feed, context):
     """
     unsubscribe from feed on the current pubsubhubbub hub 
@@ -153,29 +153,24 @@ class WSGISubClient(object):
             pass
         except: 
             log.error("Unexpected error running WSGISubClient: %s" % traceback.format_exc())
-        finally: 
-            self.context.close()
 
     def __call__(self, environ, start_response):
         try:
-            req = Request(environ)
+            with self.context:
+                req = Request(environ)
             
-            if req.method == 'POST':
-                res = self.handle_callback(req)
-            elif req.method == 'GET':
-                res = self.handle_sub_verification(req)
-            else:
-                res = Response()
-                res.status = 400
+                if req.method == 'POST':
+                    res = self.handle_callback(req)
+                elif req.method == 'GET':
+                    res = self.handle_sub_verification(req)
+                else:
+                    res = Response()
+                    res.status = 400
         except:
             log.error("Error handling PubSubHubBub request: %s" % traceback.format_exc())
             res = Response()
             res.status = 500
         finally:
-            try:
-                self.context.close()
-            except:
-                log.error("Error closing context: %s" % traceback.format_exc())
             return res(environ, start_response)
         
     def handle_sub_verification(self, req):

@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from carrot.messaging import Publisher
 from copy import deepcopy
 from couchdb import ResourceConflict, ResourceNotFound
@@ -138,9 +139,10 @@ class ScheduledMessageService(object):
 
     def run(self):
         try:
-            self._listener = self._start_listener()
-            self._dispatcher = spawn(self.run_dispatcher)
-        
+            with self.context:
+                self._listener = self._start_listener()
+                self._dispatcher = spawn(self.run_dispatcher)
+
             procs = [self._listener, self._dispatcher]
             waitall(procs)
         except GreenletExit:
@@ -148,7 +150,6 @@ class ScheduledMessageService(object):
         finally:
             killall(procs)
             waitall(procs)
-            self.context.close()
 
     ################################################################
     # The listener consumes messages on the scheduled message queue 
@@ -158,10 +159,9 @@ class ScheduledMessageService(object):
     def _start_listener(self):
         @always_ack
         def cb(message_data, message):
-            _handle_scheduler_command(message_data, message, self.context)
-            self.wakeup_dispatcher()
-            # N.B. this is run in the dispatch greenlet (not a pool or other greenlet)
-            # so we (purposely) do not shut down the context here.
+            with self.context:
+                _handle_scheduler_command(message_data, message, self.context)
+                self.wakeup_dispatcher()
 
         dispatch = MessageDispatch(self.context)
         return dispatch.start_worker(SCHEDULER_COMMAND, cb)
@@ -175,23 +175,23 @@ class ScheduledMessageService(object):
     def run_dispatcher(self):
         try:
             # cleanup any mess left over last time...
-            self.cleanup()
-            while(True):
-                log.info("checking for ready messages...")
-                last_time = self.send_ready_messages()
-                sleep_time = self._calc_sleep(last_time)
-                log.info("sleeping for %s" % sleep_time)
-                sleep_secs = sleep_time.days*84600 + sleep_time.seconds
-                try:
-                    with_timeout(sleep_secs, self.service_queue.wait)
-                except TimeoutError:
-                    pass
+            with self.context:
+                self.cleanup()
+                while(True):
+                    log.info("checking for ready messages...")
+                    last_time = self.send_ready_messages()
+                    sleep_time = self._calc_sleep(last_time)
+                    log.info("sleeping for %s" % sleep_time)
+                    sleep_secs = sleep_time.days*84600 + sleep_time.seconds
+                    try:
+                        with_timeout(sleep_secs, self.service_queue.wait)
+                    except TimeoutError:
+                        pass
 
-                if self.service_queue.ready():
-                    self.service_queue.reset()
+                    if self.service_queue.ready():
+                        self.service_queue.reset()
         except GreenletExit:
             log.debug("ScheduledMessageService dispatcher exiting...")
-            self.context.close()
 
     def wakeup_dispatcher(self):
         if not self.service_queue.ready():

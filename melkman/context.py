@@ -42,39 +42,98 @@ MELKMAN_PLUGIN_ENTRY_POINT = 'melkman_plugins'
 
 class Context(object):
     """
-    holds common configuration related data and methods.
+    holds common configuration and greenlet-safe references to
+    resources such as database and message broker connections.
+    
+    context resources should be used inside a 'with' block to 
+    insure that resources are properly allocated and disposed of
+    when greenlets exit, eg:
+    
+    with context:
+        # ... do things that require resources
+        del context.db['some_item']
+
+    it is okay to use this construct repeatedly, eg:
+    
+    def foo(context):
+        with context: 
+            bar(context)
+            # ... other stuff
+    
+    def bar(context):
+        with context:
+            # ... do stuff
+    
     """
     def __init__(self, config):
         self.config = dibjectify(config)
         self._local = green_local()
         find_plugins_by_entry_point(MELKMAN_PLUGIN_ENTRY_POINT)
+        self._broker = None
 
-    def close(self):
-        """
-        signal that the caller is finished with the context.
-        """
-        if hasattr(self._local, 'db'):
-            del self._local.db
-        
-        if hasattr(self._local, 'broker'):
-            self.broker.close()
-            del self._local.broker
+    def __enter__(self):
+        self._refcount += 1
 
-        # XXX fix this better...
+    def __exit__(self, type, value, traceback):
+        self._refcount -= 1
+        assert self._refcount >= 0
+        if self._refcount == 0:
+            self._close()
+
+        return False # do not suppress exception
+
+    def _get_refcount(self):
+        if not hasattr(self._local, 'refcount'):
+            self._local.refcount = 0
+        return self._local.refcount
+    def _set_refcount(self, val):
+        self._local.refcount = val
+    _refcount = property(_get_refcount, _set_refcount)
+
+    def __del__(self):
+        # destroy local storage for all greenlets
+        self._local = green_local()
+        self._shared_close()
+
+    def _close(self):
+        self._local_close()
+        # check for global no reference condition
+        if len(self._locals_by_greenlet) == 0:
+            self._shared_close()
+
+    def _local_close(self, greenlet_id=None):
+        """
+        called when a greenlet is finished with the context, 
+        disposes of local resources.
+        """
+
+        # if no greenlet is specified, use the calling greenlet
+        if greenlet_id is None:
+            greenlet_id = get_ident()
+
+        # remove the local storage references for the greenlet
         try:
-            del object.__getattribute__(self._local, '__dict__').setdefault('__objs', {})[get_ident()]
+            del self._locals_by_greenlet[greenlet_id]
         except KeyError:
             pass
 
-    def __del__(self):
-        self.close()
+    def _shared_close(self):
+        """
+        closes shared resources
+        """
+        if self._broker is not None:
+            old_broker = self._broker
+            self._broker = None
+            try:
+                old_broker.close()
+            except:
+                log.error("Error closing broker connection: %s" % traceback.format_exc())
 
-    def __enter__(self):
-        return self
 
-    def __exit__(self, type, value, traceback):
-        self.close()
-        return False
+    @property
+    def _locals_by_greenlet(self):
+        # XXX ugly, fix this better...
+        return object.__getattribute__(self._local, '__dict__').setdefault('__objs', {})
 
     #######################
     # Database
@@ -111,12 +170,10 @@ class Context(object):
     ######################
     @property
     def broker(self):
-        conn = getattr(self._local, 'broker', None)
-        if conn is None or conn._closed == True:
-            conn = self.create_broker_connection()
-            self._local.broker = conn
-        return conn
-        
+        if self._broker is None:
+            self._broker = self.create_broker_connection()
+        return self._broker
+
     def create_broker_connection(self):
         kargs = dict(self.config.amqp)
         if 'port' in kargs:
@@ -124,7 +181,7 @@ class Context(object):
         kargs['backend_cls'] = GreenAMQPBackend
         return BrokerConnection(**kargs)
 
-        
+
     ##################################
     # Components
     ##################################

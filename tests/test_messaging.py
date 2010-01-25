@@ -1,10 +1,10 @@
 from helpers import *
 
-@check_leaks
-def test_event_send_receive():
+@contextual
+def test_event_send_receive(ctx):
     from eventlet import sleep
     from melkman.messaging import EventBus
-    ctx = fresh_context()
+
     try:
         event_bus = EventBus(ctx)
     
@@ -23,13 +23,12 @@ def test_event_send_receive():
     
     finally:
         event_bus.kill()
-        ctx.close()
+        
 
-@check_leaks
-def test_event_multiple_listeners():
+@contextual
+def test_event_multiple_listeners(ctx):
     from eventlet import sleep
     from melkman.messaging import EventBus
-    ctx = fresh_context()
     event_bus = EventBus(ctx)
 
     try:
@@ -54,13 +53,13 @@ def test_event_multiple_listeners():
         assert got_events['two'] == 1
     finally:
         event_bus.kill()
-        ctx.close()
+        
 
-@check_leaks
-def test_event_multiple_consumers():
+@contextual
+def test_event_multiple_consumers(ctx):
     from eventlet import sleep
     from melkman.messaging import EventBus
-    ctx = fresh_context()
+
     try:
         event_bus1 = EventBus(ctx)
 
@@ -96,13 +95,13 @@ def test_event_multiple_consumers():
     finally:
         event_bus1.kill()
         event_bus2.kill()
-        ctx.close()
+        
 
-@check_leaks
-def test_event_multiple_channels():
+@contextual
+def test_event_multiple_channels(ctx):
     from eventlet import sleep
     from melkman.messaging import EventBus
-    ctx = fresh_context()
+
     event_bus = EventBus(ctx)
     try:
         got_events = dict()
@@ -133,14 +132,13 @@ def test_event_multiple_channels():
         assert got_events['two'] == 1
     finally:
         event_bus.kill()
-        ctx.close()
+        
 
-@check_leaks
-def test_dispatch_send_recv():
+@contextual
+def test_dispatch_send_recv(ctx):
     from eventlet import with_timeout
     from eventlet.event import Event
     from melkman.messaging import MessageDispatch, always_ack
-    ctx = fresh_context()
 
     w = MessageDispatch(ctx)
     message_type = 'test_dispatch_send_recv'
@@ -159,14 +157,13 @@ def test_dispatch_send_recv():
     finally:
         worker.kill()
         worker.wait()
-        ctx.close()
+        
 
-@check_leaks
-def test_dispatch_one_receiver():
+@contextual
+def test_dispatch_one_receiver(ctx):
     from eventlet import sleep
     from eventlet.event import Event
     from melkman.messaging import MessageDispatch, always_ack
-    ctx = fresh_context()
 
     w = MessageDispatch(ctx)
     message_type = 'test_dispatch_one_receiver'
@@ -191,4 +188,4 @@ def test_dispatch_one_receiver():
         worker1.wait()
         worker2.kill()
         worker2.wait()
-        ctx.close()
+        

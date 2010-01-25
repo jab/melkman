@@ -106,8 +106,8 @@ class FakeHub(TestHTTPServer):
     def renewals(self, cb, topic_url):
         return self._renewals.get((cb, topic_url), 0)
 
-@check_leaks
-def test_sub_verify():
+@contextual
+def test_sub_verify(ctx):
     from httplib2 import Http
     from eventlet import spawn
     from melk.util.nonce import nonce_str
@@ -117,7 +117,6 @@ def test_sub_verify():
     import logging
     logging.basicConfig(level=logging.WARN)
     
-    ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -191,10 +190,10 @@ def test_sub_verify():
     
     client.kill()
     client.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_sub_push():
+@contextual
+def test_sub_push(ctx):
     from httplib2 import Http
     from eventlet import sleep, spawn
     from melk.util.nonce import nonce_str
@@ -205,7 +204,6 @@ def test_sub_push():
     import logging
     logging.basicConfig(level=logging.WARN)
     
-    ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -274,10 +272,10 @@ def test_sub_push():
     client.wait()
     indexer.kill()
     indexer.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_sub_to_hub():
+@contextual
+def test_sub_to_hub(ctx):
     """
     test make_sub_request and make_unsub_request
     """
@@ -298,8 +296,7 @@ def test_sub_to_hub():
     import logging
     logging.basicConfig(level=logging.WARN)
     
-    ctx = fresh_context()
-    
+
 
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -366,10 +363,10 @@ def test_sub_to_hub():
     indexer.wait()
     hub_proc.kill()
     hub_proc.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_auto_sub():
+@contextual
+def test_auto_sub(ctx):
     # tests autosubscription when feeds are indexed 
     # with <link rel="hub" /> entries. 
     from datetime import datetime
@@ -379,7 +376,6 @@ def test_auto_sub():
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for
     from melkman.fetch.worker import run_feed_indexer
 
-    ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -423,10 +419,10 @@ def test_auto_sub():
     indexer.wait()
     hub_proc.kill()
     hub_proc.wait()
-    ctx.close()
     
-@check_leaks
-def test_push_index_digest():
+    
+@contextual
+def test_push_index_digest(ctx):
     from melk.util.nonce import nonce_str
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
@@ -434,7 +430,6 @@ def test_push_index_digest():
     from eventlet import sleep, spawn
     from melkman.fetch.pubsubhubbub import psh_digest
 
-    ctx = fresh_context()
 
     # start a feed indexer
     indexer = spawn(run_feed_indexer, ctx)
@@ -499,10 +494,10 @@ def test_push_index_digest():
 
     indexer.kill()
     indexer.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_disabled_unsubscribes():
+@contextual
+def test_disabled_unsubscribes(ctx):
     """
     tests that if pubsub is disabled for a 
     feed, it becomes unsubscribed from it's 
@@ -512,8 +507,6 @@ def test_disabled_unsubscribes():
     from melkman.db import RemoteFeed
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
-
-    ctx = fresh_context()
     
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -555,10 +548,10 @@ def test_disabled_unsubscribes():
     client.wait()
     hub_proc.kill()
     hub_proc.wait()
-    ctx.close()
+    
 
-@check_leaks
-def test_hub_invalidation():
+@contextual
+def test_hub_invalidation(ctx):
     """
     tests that if a currently subscribed hub is 
     no longer listed by a feed unsubscription is 
@@ -569,8 +562,6 @@ def test_hub_invalidation():
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
 
-    ctx = fresh_context()
-    
     w = WSGISubClient(ctx)
     client = spawn(w.run)
 
@@ -610,10 +601,10 @@ def test_hub_invalidation():
     client.wait()
     hub_proc.kill()
     hub_proc.wait()
-    ctx.close()
     
-@check_leaks
-def test_hub_invalidation_resub():
+    
+@contextual
+def test_hub_invalidation_resub(ctx):
     """
     tests that if a currently subscribed hub is 
     no longer listed, we subscribe to a different
@@ -624,8 +615,6 @@ def test_hub_invalidation_resub():
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
 
-    ctx = fresh_context()
-    
     w = WSGISubClient(ctx)
     client = spawn(w.run)
 
@@ -677,10 +666,10 @@ def test_hub_invalidation_resub():
     hub_proc.wait()
     hub2_proc.kill()
     hub2_proc.wait()
-    ctx.close()
     
-@check_leaks
-def test_hub_lease_renew():
+    
+@contextual
+def test_hub_lease_renew(ctx):
     """
     tests that we resubscribe with a hub 
     within the hub specified lease window.
@@ -690,8 +679,6 @@ def test_hub_lease_renew():
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
 
-    ctx = fresh_context()
-    
     w = WSGISubClient(ctx)
     client = spawn(w.run)
 
@@ -728,10 +715,10 @@ def test_hub_lease_renew():
     client.wait()
     hub_proc.kill()
     hub_proc.wait()
-    ctx.close()
+    
 
-@check_leaks    
-def test_hub_lease_renew_failover():
+@contextual    
+def test_hub_lease_renew_failover(ctx):
     """
     tests that if we fail to renew a lease with a hub 
     we will failover to a different hub if one is available.
@@ -741,7 +728,6 @@ def test_hub_lease_renew_failover():
     from melkman.fetch.pubsubhubbub import WSGISubClient, callback_url_for 
     from melkman.fetch.pubsubhubbub import hubbub_sub, update_pubsub_state
 
-    ctx = fresh_context()
 
     w = WSGISubClient(ctx)
     client = spawn(w.run)
@@ -796,4 +782,4 @@ def test_hub_lease_renew_failover():
     client.wait()
     hub2_proc.kill()
     hub2_proc.wait()
-    ctx.close()
+    

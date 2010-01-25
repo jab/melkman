@@ -16,7 +16,7 @@
 # 51 Franklin Street, Fifth Floor,
 # Boston, MA  02110-1301
 # USA
-
+from __future__ import with_statement
 from couchdb import ResourceConflict, ResourceNotFound
 from couchdb.design import ViewDefinition
 from couchdb.schema import *
@@ -43,15 +43,17 @@ def defer_event(send_time, channel, event, context, **kw):
     """
     defer EventBus.send(channel, event) until send_time
     """
-    pub = EventPublisher(channel, context)
-    return defer_publish(send_time, event, pub, context, **kw)
+    with context:
+        pub = EventPublisher(channel, context)
+        return defer_publish(send_time, event, pub, context, **kw)
 
 def defer_message(send_time, message, message_type, context, **kw):
     """
     defer MessageDispatch.send(message, message_type) until send_time 
     """
-    pub = MessageDispatchPublisher(message_type, context)
-    return defer_publish(send_time, message, pub, context, **kw)
+    with context:
+        pub = MessageDispatchPublisher(message_type, context)
+        return defer_publish(send_time, message, pub, context, **kw)
     
 def defer_publish(send_time, message, publisher, context, **kw):
     """
@@ -96,8 +98,9 @@ def defer_amqp_message(send_time, message, routing_key, exchange, context, **kw)
     }
     message.update(**kw)
 
-    publisher = MessageDispatch(context)
-    publisher.send(message, SCHEDULER_COMMAND)
+    with context:
+        publisher = MessageDispatch(context)
+        publisher.send(message, SCHEDULER_COMMAND)
 
 
 
@@ -106,27 +109,27 @@ def cancel_deferred(message_id, context):
         'command': CANCEL_MESSAGE_COMMAND,
         'message_id': message_id
     }
-    publisher = MessageDispatch(context)
-    publisher.send(message, SCHEDULER_COMMAND)
+    with context:
+        publisher = MessageDispatch(context)
+        publisher.send(message, SCHEDULER_COMMAND)
 
 
 class SchedulerSetup(Component):
     implements(IRunDuringBootstrap)
 
     def bootstrap(self, context, purge=False):
-        
-        log.info("Syncing deferred message database views...")
-        view_deferred_messages_by_timestamp.sync(context.db)
+        with context:
+            log.info("Syncing deferred message database views...")
+            view_deferred_messages_by_timestamp.sync(context.db)
 
-        log.info("Setting up scheduler queues...")
-        dispatch = MessageDispatch(context)
-        dispatch.declare(SCHEDULER_COMMAND)
-        if purge == True:
-            log.info("Clearing scheduler queues...")
-            dispatch.clear(SCHEDULER_COMMAND)
-            log.info("Destroying existing deferred messages...")
-            delete_all_in_view(context.db, view_deferred_messages_by_timestamp)
-        context.close()
+            log.info("Setting up scheduler queues...")
+            dispatch = MessageDispatch(context)
+            dispatch.declare(SCHEDULER_COMMAND)
+            if purge == True:
+                log.info("Clearing scheduler queues...")
+                dispatch.clear(SCHEDULER_COMMAND)
+                log.info("Destroying existing deferred messages...")
+                delete_all_in_view(context.db, view_deferred_messages_by_timestamp)
             
 class DeliveryOptions(Schema):
     exchange = TextField()

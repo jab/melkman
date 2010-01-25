@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from copy import deepcopy
 from couchdb import ResourceConflict, ResourceNotFound
 from eventlet import spawn, sleep
@@ -186,37 +187,36 @@ def _handle_update_subscription(message_data, message, context):
 
 def run_aggregator(context):
     try:
-        dispatcher = MessageDispatch(context)
-    
-        procs = []
         worker_pool = Pool()
 
         @pooled(worker_pool)
         @always_ack
         def bucket_modified_handler(message_data, message):
             try:
-                _handle_bucket_modified(message_data, message, context)
+                with context:
+                    _handle_bucket_modified(message_data, message, context)
             except GreenletExit:
                 pass
             except: 
                 log.error("Unexpected error handling bucking modified message: %s" % traceback.format_exc())
-            finally:
-                context.close()
+
         
         @pooled(worker_pool)
         @always_ack
         def update_subscription_handler(message_data, message):
             try:
-                _handle_update_subscription(message_data, message, context)
+                with context:
+                    _handle_update_subscription(message_data, message, context)
             except GreenletExit:
                 pass
             except: 
                 log.error("Unexpected error handling update subscription message: %s" % traceback.format_exc())
-            finally:
-                context.close()
-    
-        procs.append(dispatcher.start_worker(BUCKET_MODIFIED, bucket_modified_handler))
-        procs.append(dispatcher.start_worker(UPDATE_SUBSCRIPTION, update_subscription_handler))
+
+        procs = []
+        with context:
+            dispatcher = MessageDispatch(context)
+            procs.append(dispatcher.start_worker(BUCKET_MODIFIED, bucket_modified_handler))
+            procs.append(dispatcher.start_worker(UPDATE_SUBSCRIPTION, update_subscription_handler))
     
         waitall(procs)
     except GreenletExit:

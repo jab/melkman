@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from datetime import datetime, timedelta
 from giblets import Component, ExtensionPoint, implements
 from eventlet import spawn
@@ -221,21 +222,22 @@ def _handle_push(url, message_data, message, context):
 def run_feed_indexer(context):
     try:
         worker_pool = Pool()
-        dispatch = MessageDispatch(context)
-    
+
         @pooled(worker_pool)
         @always_ack
         def cb(message_data, message):
             try:
-                return handle_message(message_data, message, context)
+                with context:
+                    return handle_message(message_data, message, context)
             except GreenletExit:
                 pass
             except: 
                 log.error("Unexpected error handling feed indexer message: %s" % traceback.format_exc())
-            finally:
-                context.close()
 
-        proc = dispatch.start_worker(INDEX_FEED_COMMAND, cb)
+        with context:
+            dispatch = MessageDispatch(context)
+            proc = dispatch.start_worker(INDEX_FEED_COMMAND, cb)
+        
         proc.wait()
     except GreenletExit:
         pass
@@ -248,7 +250,6 @@ def run_feed_indexer(context):
         # stop working on existing work
         worker_pool.killall()
         worker_pool.waitall()
-        context.close()
 
 class FeedIndexerProcess(Component):
     implements(IWorkerProcess)

@@ -1,18 +1,17 @@
 from helpers import *
 
-@check_leaks
-def test_create_composite():
+@contextual
+def test_create_composite(ctx):
     from melkman.db.composite import Composite
-    ctx = fresh_context()
     cc = Composite.create(ctx)
     cc.save()
-    ctx.close()
+    
 
-@check_leaks
-def test_composites_by_sub():
+@contextual
+def test_composites_by_sub(ctx):
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite, view_composites_by_subscription
-    ctx = fresh_context()
+
     c1 = Composite.create(ctx)
     c2 = Composite.create(ctx)
 
@@ -55,15 +54,14 @@ def test_composites_by_sub():
     for r in view_composites_by_subscription(ctx.db, include_docs=True, startkey=bucket3.id, endkey=bucket3.id):
         assert False, 'unexpected subscription'
 
-    ctx.close()
+    
 
-@check_leaks
-def test_composite_subs_by_title():
+@contextual
+def test_composite_subs_by_title(ctx):
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite, view_composite_subscriptions_by_title
     from random import shuffle
     
-    ctx = fresh_context()
     cc = Composite.create(ctx)
 
     buckets = []
@@ -85,14 +83,13 @@ def test_composite_subs_by_title():
     for i, row in enumerate(view_composite_subscriptions_by_title(ctx.db, startkey=[cc.id, None], endkey=[cc.id, {}])):
         assert row.value['bucket_id'] == buckets[i].id
     assert i + 1 == len(buckets)
-    ctx.close()
+    
 
-@check_leaks
-def test_composite_filtered_update():
+@contextual
+def test_composite_filtered_update(ctx):
     from melkman.db.composite import Composite
     from random import shuffle
     
-    ctx = fresh_context()
     cc = Composite.create(ctx)
     # a filter stack that accepts only things with the 
     # word tortoise in the title, or is tagged tortoise
@@ -135,4 +132,4 @@ def test_composite_filtered_update():
     for item in not_ok_items:
         assert not cc.has_news_item(item)
     
-    ctx.close()
+    

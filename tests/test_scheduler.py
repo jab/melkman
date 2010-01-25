@@ -1,7 +1,7 @@
 from helpers import *
 
-@check_leaks
-def test_deferred_in_database():
+@contextual
+def test_deferred_in_database(ctx):
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
     from eventlet import sleep, spawn
@@ -13,12 +13,6 @@ def test_deferred_in_database():
     from melkman.scheduler import defer_amqp_message, cancel_deferred
     from melkman.scheduler.worker import ScheduledMessageService
     from melkman.scheduler.worker import DeferredAMQPMessage, view_deferred_messages_by_timestamp
-
-
-    # log = logging.getLogger('melkman.scheduler')
-    # log.setLevel(level=logging.DEBUG)
-    # log.addHandler(logging.StreamHandler(sys.stdout))
-    ctx = fresh_context()
 
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
@@ -42,12 +36,12 @@ def test_deferred_in_database():
         assert message.timestamp == when
     assert count == 1
 
-    ctx.close()
+    
 
 
 
-@check_leaks
-def test_deferred_send_receive():
+@contextual
+def test_deferred_send_receive(ctx):
     from datetime import datetime, timedelta
     from carrot.messaging import Consumer
     from eventlet import sleep, spawn, with_timeout
@@ -60,8 +54,6 @@ def test_deferred_send_receive():
     from melkman.context import Context
     from melkman.scheduler import defer_amqp_message, cancel_deferred
     from melkman.scheduler.worker import ScheduledMessageService
-
-    ctx = fresh_context()
 
     got_message = Event()
     def got_message_cb(*args, **kw):
@@ -79,7 +71,7 @@ def test_deferred_send_receive():
             pass
         finally:
             consumer.close()
-            ctx.close()
+            
 
     cons = spawn(do_consume)
 
@@ -100,10 +92,10 @@ def test_deferred_send_receive():
         sched.wait()
         cons.kill()
         cons.wait()
-        ctx.close()
+        
 
-@check_leaks
-def test_defer_event():
+@contextual
+def test_defer_event(ctx):
     from datetime import datetime, timedelta
     from eventlet import sleep, spawn, with_timeout
     from eventlet.event import Event
@@ -113,7 +105,6 @@ def test_defer_event():
 
     CHAN = 'test_chan'
 
-    ctx = fresh_context()
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
 
@@ -138,10 +129,10 @@ def test_defer_event():
         eb.kill()
         sched.kill()
         sched.wait()
-        ctx.close()
+        
 
-@check_leaks
-def test_defer_message_dispatch():
+@contextual
+def test_defer_message_dispatch(ctx):
     from datetime import datetime, timedelta
     from eventlet import sleep, spawn, with_timeout
     from eventlet.event import Event
@@ -149,7 +140,6 @@ def test_defer_message_dispatch():
     from melkman.scheduler import defer_message
     from melkman.scheduler.worker import ScheduledMessageService
 
-    ctx = fresh_context()
     sms = ScheduledMessageService(ctx)
     sched = spawn(sms.run)
     w = MessageDispatch(ctx)
@@ -177,5 +167,5 @@ def test_defer_message_dispatch():
         worker.wait()
         sched.kill()
         sched.wait()
-        ctx.close()
+        
 

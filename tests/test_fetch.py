@@ -9,14 +9,12 @@ import traceback
 
 log = logging.getLogger(__name__)
 
-@check_leaks
-def test_index_request():
+@contextual
+def test_index_request(ctx):
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import request_feed_index
     from melkman.fetch.worker import run_feed_indexer
     from eventlet import sleep, spawn
-    
-    ctx = fresh_context()
     
     # start a feed indexer
     indexer = spawn(run_feed_indexer, ctx)
@@ -44,17 +42,15 @@ def test_index_request():
         indexer.wait()
         ts_proc.kill()
         ts_proc.wait()
-        ctx.close()
+        
 
-@check_leaks
-def test_schedule_index():
+@contextual
+def test_schedule_index(ctx):
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import schedule_feed_index
     from melkman.fetch.worker import run_feed_indexer
     from melkman.scheduler.worker import ScheduledMessageService
     from eventlet import sleep, spawn
-    
-    ctx = fresh_context()
     
     # start a feed indexer
     indexer = spawn(run_feed_indexer, ctx)
@@ -91,16 +87,14 @@ def test_schedule_index():
         sched.wait()
         ts_proc.kill()
         ts_proc.wait()
-        ctx.close()
+        
 
-@check_leaks            
-def test_push_index():
+@contextual            
+def test_push_index(ctx):
     from melkman.db.remotefeed import RemoteFeed
     from melkman.fetch import push_feed_index
     from melkman.fetch.worker import run_feed_indexer
     from eventlet import sleep, spawn
-    
-    ctx = fresh_context()
     
     # start a feed indexer
     indexer = spawn(run_feed_indexer, ctx)
@@ -119,4 +113,4 @@ def test_push_index():
     finally:
         indexer.kill()
         indexer.wait()
-        ctx.close()
+        
