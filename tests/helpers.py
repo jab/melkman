@@ -22,8 +22,6 @@ __all__ = ['make_db', 'fresh_context', 'data_path', 'test_yaml_file', 'random_id
            'append_param', 'no_micro', 'TestHTTPServer', 'FileServer', 'contextual']
 
 
-_last_context = None
-
 def data_path():
     here = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(here, 'data')
@@ -39,9 +37,6 @@ def make_db():
 def fresh_context():
     ctx = Context.from_yaml(test_yaml_file())
     ctx.bootstrap(purge=True)
-    
-    global _last_context
-    _last_context = ctx
     return ctx
 
 def random_id():
