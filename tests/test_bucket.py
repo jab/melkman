@@ -22,12 +22,12 @@ import time
 
 from helpers import *
 
-def test_bucket_add_remove():
+@contextual
+def test_bucket_add_remove(ctx):
     """
     test adding and removing a single item from a bucket
     """
     from melkman.db import NewsBucket
-    ctx = fresh_context()
     
     # create a bucket
     bucket_id = random_id()
@@ -39,7 +39,7 @@ def test_bucket_add_remove():
     # make sure it is in the bucket before and after saving
     assert bucket.has_news_item(item_id)
     bucket.save()
-    bucket = NewsBucket.get(bucket_id, ctx)
+    bucket.reload()
     
     assert bucket is not None
     assert bucket.has_news_item(item_id)
@@ -49,16 +49,18 @@ def test_bucket_add_remove():
     # make sure it is not in the bucket before and after saving
     assert not bucket.has_news_item(item_id)
     bucket.save()
-    bucket = NewsBucket.get(bucket_id, ctx)
+    bucket.reload()
     assert not bucket.has_news_item(item_id)
     
-def test_bucket_silent_nodupes():
+    
+    
+@contextual
+def test_bucket_silent_nodupes(ctx):
     """
     tests that calling add_news_item with the 
     same item twice only adds the item once.
     """
     from melkman.db import NewsBucket
-    ctx = fresh_context()
     
     # create a bucket and add an item to it
     bucket_id = random_id()
@@ -84,12 +86,14 @@ def test_bucket_silent_nodupes():
     bucket.remove_news_item(item_id)
     assert not bucket.has_news_item(item_id)
 
-def test_bucket_overwrite_item():
+    
+
+@contextual
+def test_bucket_overwrite_item(ctx):
     """
     test semantics of updating an item
     """
     from melkman.db import NewsBucket, NewsItemRef
-    ctx = fresh_context()
     item_id = random_id()
     
     info1 = {'item_id': item_id,
@@ -120,7 +124,7 @@ def test_bucket_overwrite_item():
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info1)
     bucket.save()
-    bucket = NewsBucket.get(bucket_id, ctx)
+    bucket.reload()
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info1)
     
@@ -131,7 +135,7 @@ def test_bucket_overwrite_item():
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
     bucket.save()
-    bucket = NewsBucket.get(bucket_id, ctx)
+    bucket.reload()
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
 
@@ -142,7 +146,7 @@ def test_bucket_overwrite_item():
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
     bucket.save()
-    bucket = NewsBucket.get(bucket_id, ctx)
+    bucket.reload()
     assert bucket.has_news_item(item_id)
     assert info_matches(bucket.entries[item_id], info2)
 
@@ -154,43 +158,50 @@ def test_bucket_overwrite_item():
             count += 1    
     assert count == 1
     
-def test_bucket_save_twice():
+    
+
+@contextual
+def test_bucket_save_twice(ctx):
     from melkman.db import NewsBucket
-    ctx = fresh_context()
 
     bucket = NewsBucket.create(ctx, random_id())
     bucket.save()
     bucket.save()
+
     
-def test_add_before_save_no_id():
+
+@contextual
+def test_add_before_save_no_id(ctx):
     from melkman.db import NewsBucket
-    ctx = fresh_context()
 
     bucket = NewsBucket.create(ctx)
     bucket.add_news_item('abc')
     bucket.save()
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert bucket.has_news_item('abc')
+    
+    
 
-def test_add_from_ref():
+@contextual
+def test_add_from_ref(ctx):
     from melkman.db import NewsBucket, NewsItemRef
-    ctx = fresh_context()
 
     bucket = NewsBucket.create(ctx)
     bucket.add_news_item('abc')
     bucket.save()
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert bucket.has_news_item('abc')
     
     bucket2 = NewsBucket.create(ctx)
     bucket2.add_news_item(bucket.entries['abc'])
     bucket2.save()
-    bucket2 = NewsBucket.get(bucket2.id, ctx)
+    bucket2.reload()
     assert bucket.has_news_item('abc')
+    
 
-def test_bucket_delete():
+@contextual
+def test_bucket_delete(ctx):
     from melkman.db import NewsBucket, NewsItemRef
-    ctx = fresh_context()
 
     bucket = NewsBucket.create(ctx)
     items = [random_id() for i in range(1000)]
@@ -213,9 +224,11 @@ def test_bucket_delete():
     for ref_id in ref_ids:
         assert not ref_id in ctx.db
 
-def test_immediate_add():
+    
+
+@contextual
+def test_immediate_add(ctx):
     from melkman.db.bucket import NewsBucket, immediate_add, view_entries
-    ctx = fresh_context()
     
     bucket = NewsBucket.create(ctx)
     bucket.save()
@@ -242,8 +255,10 @@ def test_immediate_add():
     for item in items:
         assert bucket.has_news_item(item)
 
+    
 
-def test_bucket_conflict_does_not_stop_item_additions():
+@contextual
+def test_bucket_conflict_does_not_stop_item_additions(ctx):
     """
     This tests that item additions succeed independently from 
     changes to the bucket document. Workers rely on this 
@@ -252,7 +267,6 @@ def test_bucket_conflict_does_not_stop_item_additions():
     """
     from couchdb import ResourceConflict
     from melkman.db.bucket import NewsBucket
-    ctx = fresh_context()
     
     bucket = NewsBucket.create(ctx)
     bucket.save()
@@ -294,16 +308,17 @@ def test_bucket_conflict_does_not_stop_item_additions():
         assert iid in b3.entries
     for iid in items2:
         assert iid in b3.entries
+    
+    
 
-
-def test_bucket_maxlen():
+@contextual
+def test_bucket_maxlen(ctx):
     """
     Test that bucket with maxlen behaves as expected
     """
     from melkman.db.bucket import NewsBucket, NewsItemRef, SORTKEY
     from datetime import datetime, timedelta
     from operator import attrgetter
-    ctx = fresh_context()
     
     # add 10 items spaced an hour apart to a bucket of max-length 3:
 
@@ -337,7 +352,7 @@ def test_bucket_maxlen():
 
         assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
         bucket.save()
-        bucket = NewsBucket.get(bucket.id, ctx)
+        bucket.reload()
         assert ids_by_timestamp(bucket.entries) == sorteditemsids[-bucketlen:]
         return bucket
 
@@ -364,11 +379,11 @@ def test_bucket_maxlen():
     for i in items:
         bucket.add_news_item(i)
     bucket = check_before_and_after_save(bucket)
+    
 
-
-def test_direct_entries_access():
+@contextual
+def test_direct_entries_access(ctx):
     from melkman.db.bucket import NewsBucket, NewsItemRef
-    ctx = fresh_context()
 
     # if you add something to bucket.entries directly rather than going
     # through the interface, make sure it's there after saving (i.e. NewsBucket
@@ -383,7 +398,7 @@ def test_direct_entries_access():
     assert bucket.has_news_item(item1)
     assert bucket.has_news_item(item2)
     bucket.save()
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert len(bucket.entries) == 2
     assert bucket.has_news_item(item1)
     assert bucket.has_news_item(item2)
@@ -395,7 +410,7 @@ def test_direct_entries_access():
     # but the document's maxlen field is not updated:
     assert bucket.maxlen is None
     # so after re-retrieving the document the nldict's maxlen is the old value
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert bucket.entries.maxlen is None
     assert len(bucket.entries) == 2 # and the bucket still has two items
 
@@ -404,7 +419,7 @@ def test_direct_entries_access():
     assert len(bucket.entries) == 1
     bucket.save()
     # ...items are now deleted from persistent storage too
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert len(bucket.entries) == 1
     # but the maxlen field on the document was still never set
     assert bucket.maxlen == None
@@ -412,7 +427,7 @@ def test_direct_entries_access():
     # add back both items since one of them was discarded
     bucket.entries.update({item1.item_id: item1, item2.item_id: item2})
     bucket.save()
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert len(bucket.entries) == 2
 
     # if we set the maxlen field on the bucket rather than using set_maxlen...
@@ -421,5 +436,6 @@ def test_direct_entries_access():
     assert len(bucket.entries) == 2
     # ...until *after* saving:
     bucket.save()
-    bucket = NewsBucket.get(bucket.id, ctx)
+    bucket.reload()
     assert len(bucket.entries) == 1
+    

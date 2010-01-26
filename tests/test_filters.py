@@ -1,11 +1,10 @@
-from helpers import dummy_news_item
+from helpers import *
 
-def test_match_filter():
-    from helpers import fresh_context
+@contextual
+def test_match_filter(ctx):
     from melk.util.dibject import Dibject, dibjectify
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
     
     cfgs = []
@@ -41,13 +40,11 @@ def test_match_filter():
     assert filt(dummy_news_item({'details': {'foo': {'bar': 'fooqqqbar'}}}))
     assert not filt(dummy_news_item({'details': {'foo': {'bar': '123foo'}}}))
     
-
-def test_or_filter():
-    from helpers import fresh_context
+@contextual
+def test_or_filter(ctx):
     from melk.util.dibject import Dibject, dibjectify
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {
@@ -70,12 +67,11 @@ def test_or_filter():
     filt = filter_factory.create_filter('or', cfg)
     assert not filt(dummy_news_item({}))
 
-def test_and_filter():
-    from helpers import fresh_context
+@contextual
+def test_and_filter(ctx):
     from melk.util.dibject import Dibject, dibjectify
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {
@@ -98,13 +94,12 @@ def test_and_filter():
     cfg = {'filters': []}
     filt = filter_factory.create_filter('and', cfg)
     assert not filt(dummy_news_item({}))
-    
-def test_filter_chain():
-    from helpers import fresh_context
+
+@contextual    
+def test_filter_chain(ctx):
     from melk.util.dibject import Dibject, dibjectify
     from melkman.filters import NewsItemFilterFactory, ACCEPT_ITEM, REJECT_ITEM
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
     
     chain = [
@@ -137,12 +132,11 @@ def test_filter_chain():
     assert chain(dummy_news_item({'author': 'barney', 'details': {'foo': 'bar'}})) == ACCEPT_ITEM
     
     
-def test_filter_plugin():
+@contextual
+def test_filter_plugin(ctx):
     from giblets import Component, implements
-    from helpers import fresh_context
     from melkman.filters import NewsItemFilterFactory, INewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     def dummy(item):
@@ -163,13 +157,12 @@ def test_filter_plugin():
     assert filter_factory.create_filter('foo_filt', {}) is not None
     assert filter_factory.create_filter('bar_filt', {}) is not None
     assert filter_factory.create_filter('quux_filt', {}) is None
-    
-def test_author_filter():
-    from helpers import fresh_context
+
+@contextual    
+def test_author_filter(ctx):
     from melk.util.dibject import Dibject
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {'values': ['Fred', 'Barney']}
@@ -183,12 +176,11 @@ def test_author_filter():
     assert filt(dummy_news_item({'author': 'bArnEy'}))
     assert not filt(dummy_news_item({'author': 'blurney'}))
 
-def test_tag_filter():
-    from helpers import fresh_context
+@contextual
+def test_tag_filter(ctx):
     from melk.util.dibject import Dibject
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {'values': ['soup', 'nuts']}
@@ -204,12 +196,11 @@ def test_tag_filter():
     assert filt(dummy_news_item({'details': {'tags': [{'label': 'fruit'}, {'label': 'soup'}]}}))
     assert not filt(dummy_news_item({'details': {'tags': [{'label': 'fruit'}]}}))
 
-def test_title_filter():
-    from helpers import fresh_context
+@contextual
+def test_title_filter(ctx):
     from melk.util.dibject import Dibject
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {'values': ['Fred', 'Barney']}
@@ -223,12 +214,11 @@ def test_title_filter():
     assert filt(dummy_news_item({'title': 'bArnEy'}))
     assert not filt(dummy_news_item({'title': 'blurney'}))
 
-def test_source_filter():
-    from helpers import fresh_context
+@contextual
+def test_source_filter(ctx):
     from melk.util.dibject import Dibject
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     cfg = {'values': ['http://example.org/Feed1', 'http://example.org/Feed2']}
@@ -253,12 +243,11 @@ def test_source_filter():
         for j in range(2):
             assert filt(dummy_news_item({'source_url': 'http://server%d.example.org/Feed%d' % (j,i)}))
 
-def test_content_filter():
-    from helpers import fresh_context
+@contextual
+def test_content_filter(ctx):
     from melk.util.dibject import Dibject
     from melkman.filters import NewsItemFilterFactory
 
-    ctx = fresh_context()
     filter_factory = NewsItemFilterFactory(ctx.component_manager)
 
     

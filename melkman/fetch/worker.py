@@ -1,7 +1,8 @@
+from __future__ import with_statement
 from datetime import datetime, timedelta
 from giblets import Component, ExtensionPoint, implements
-from eventlet.pool import Pool
-from eventlet.proc import spawn, ProcExit
+from eventlet import spawn
+from eventlet.support.greenlets import GreenletExit
 from httplib2 import Http
 import logging
 import traceback
@@ -10,6 +11,7 @@ from melkman.db import RemoteFeed
 from melkman.fetch.api import INDEX_FEED_COMMAND
 from melkman.fetch.api import schedule_feed_index
 from melkman.fetch.api import PostIndexAction, IndexRequestFilter
+from melkman.green import Pool
 from melkman.messaging import MessageDispatch, always_ack, pooled
 from melkman.worker import IWorkerProcess
 
@@ -218,21 +220,36 @@ def _handle_push(url, message_data, message, context):
 
 
 def run_feed_indexer(context):
-    worker_pool = Pool(max_size=10000)
-    dispatch = MessageDispatch(context)
-    
-    @pooled(worker_pool)
-    @always_ack
-    def cb(message_data, message):
-        return handle_message(message_data, message, context)
-        
     try:
-        proc = dispatch.start_worker(INDEX_FEED_COMMAND, cb)
+        worker_pool = Pool()
+
+        @pooled(worker_pool)
+        @always_ack
+        def cb(message_data, message):
+            try:
+                with context:
+                    return handle_message(message_data, message, context)
+            except GreenletExit:
+                pass
+            except: 
+                log.error("Unexpected error handling feed indexer message: %s" % traceback.format_exc())
+
+        with context:
+            dispatch = MessageDispatch(context)
+            proc = dispatch.start_worker(INDEX_FEED_COMMAND, cb)
+        
         proc.wait()
-    except ProcExit:
+    except GreenletExit:
+        pass
+    except: 
+        log.error("Unexpected error running feed indexer: %s" % traceback.format_exc())
+    finally:
+        # stop accepting work
         proc.kill()
+        proc.wait()
+        # stop working on existing work
         worker_pool.killall()
-        raise
+        worker_pool.waitall()
 
 class FeedIndexerProcess(Component):
     implements(IWorkerProcess)

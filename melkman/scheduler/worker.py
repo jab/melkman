@@ -1,16 +1,17 @@
+from __future__ import with_statement
 from carrot.messaging import Publisher
 from copy import deepcopy
 from couchdb import ResourceConflict, ResourceNotFound
 from couchdb.schema import DateTimeField
 from datetime import datetime, timedelta
-from eventlet.api import sleep
-from eventlet.coros import event
-from eventlet.proc import spawn as spawn_proc, waitall, killall, ProcExit
+from eventlet import sleep, spawn, with_timeout, TimeoutError
+from eventlet.event import Event
+from eventlet.support.greenlets import GreenletExit
 from giblets import Component, implements
 import logging 
 import traceback
 
-from melkman.green import timeout_wait
+from melkman.green import waitall, killall
 from melkman.messaging import MessageDispatch, always_ack
 from melkman.scheduler.api import DeliveryOptions, DeferredAMQPMessage, view_deferred_messages_by_timestamp
 from melkman.scheduler.api import SCHEDULER_COMMAND, DEFER_MESSAGE_COMMAND, CANCEL_MESSAGE_COMMAND
@@ -132,20 +133,23 @@ class ScheduledMessageService(object):
 
     def __init__(self, context):
         self.context = context
-        self.service_queue = event()
+        self.service_queue = Event()
         self._listener = None
         self._dispatch = None
 
     def run(self):
         try:
-            self._listener = self._start_listener()
-            self._dispatcher = spawn_proc(self.run_dispatcher)
-        
+            with self.context:
+                self._listener = self._start_listener()
+                self._dispatcher = spawn(self.run_dispatcher)
+
             procs = [self._listener, self._dispatcher]
             waitall(procs)
-        except ProcExit:
+        except GreenletExit:
+            pass
+        finally:
             killall(procs)
-            raise
+            waitall(procs)
 
     ################################################################
     # The listener consumes messages on the scheduled message queue 
@@ -155,9 +159,10 @@ class ScheduledMessageService(object):
     def _start_listener(self):
         @always_ack
         def cb(message_data, message):
-            _handle_scheduler_command(message_data, message, self.context)
-            self.wakeup_dispatcher()
-        
+            with self.context:
+                _handle_scheduler_command(message_data, message, self.context)
+                self.wakeup_dispatcher()
+
         dispatch = MessageDispatch(self.context)
         return dispatch.start_worker(SCHEDULER_COMMAND, cb)
 
@@ -168,19 +173,25 @@ class ScheduledMessageService(object):
     # to the message broker
     ##############################################################    
     def run_dispatcher(self):
-        # cleanup any mess left over last time...
-        self.cleanup()
-        while(True):
-            log.info("checking for ready messages...")
-            last_time = self.send_ready_messages()
-            sleep_time = self._calc_sleep(last_time)
-            log.info("sleeping for %s" % sleep_time)
-            
-            sleep_secs = sleep_time.days*84600 + sleep_time.seconds
-            timeout_wait(self.service_queue, sleep_secs)
-            
-            if self.service_queue.ready():
-                self.service_queue.reset()
+        try:
+            # cleanup any mess left over last time...
+            with self.context:
+                self.cleanup()
+                while(True):
+                    log.info("checking for ready messages...")
+                    last_time = self.send_ready_messages()
+                    sleep_time = self._calc_sleep(last_time)
+                    log.info("sleeping for %s" % sleep_time)
+                    sleep_secs = sleep_time.days*84600 + sleep_time.seconds
+                    try:
+                        with_timeout(sleep_secs, self.service_queue.wait)
+                    except TimeoutError:
+                        pass
+
+                    if self.service_queue.ready():
+                        self.service_queue.reset()
+        except GreenletExit:
+            log.debug("ScheduledMessageService dispatcher exiting...")
 
     def wakeup_dispatcher(self):
         if not self.service_queue.ready():
@@ -250,7 +261,7 @@ class ScheduledMessageService(object):
                 try:
                     if self._dispatch_message(message):
                         dispatch_count += 1
-                except ProcExit:
+                except GreenletExit:
                     # asked to stop, go ahead and quit.
                     raise
                 except:

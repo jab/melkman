@@ -133,7 +133,6 @@ class NewsBucket(DocumentHelper):
 
     def __init__(self, *args, **kw):
         if not args and not 'id' in kw:
-            log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         
         DocumentHelper.__init__(self, *args, **kw)
@@ -156,7 +155,6 @@ class NewsBucket(DocumentHelper):
     @classmethod
     def create(cls, context, *args, **kw):
         if not args and not 'id' in kw:
-            log.warn("assigning random id to bucket...")
             args = [melk_id(nonce_str())]
         return super(NewsBucket, cls).create(context, *args, **kw)
 
@@ -262,6 +260,12 @@ class NewsBucket(DocumentHelper):
     def clear(self):
         self._lazy_load_entries()
         self._entries.clear()
+        
+    def reload(self):
+        DocumentHelper.reload(self)
+        self._updated = {}
+        self._removed = {}
+        self._entries = None
 
     def save(self):
         self.last_modification_date = datetime.utcnow()

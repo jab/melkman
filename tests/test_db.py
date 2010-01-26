@@ -1,10 +1,9 @@
 from helpers import *
 
-def test_get_by_ids():
+@contextual
+def test_get_by_ids(ctx):
     from couchdb.schema import IntegerField
     from melkman.db.util import DocumentHelper
-
-    ctx = fresh_context()
 
     class Foo(DocumentHelper):
         i = IntegerField()
@@ -22,6 +21,8 @@ def test_get_by_ids():
     foo1, foo2 = Foo.get_by_ids((foo1.id, foo2.id), ctx)
     assert foo1.i == 1 and foo2.i == 2
     assert foo1.flag and foo2.flag
+    
+    
 
 def test_db_util_doctest():
     import doctest

@@ -1,8 +1,8 @@
+from __future__ import with_statement
 from copy import deepcopy
 from couchdb import ResourceConflict, ResourceNotFound
-from eventlet.api import spawn, sleep
-from eventlet.pool import Pool
-from eventlet.proc import spawn as spawn_proc, waitall, killall, ProcExit
+from eventlet import spawn, sleep
+from eventlet.support.greenlets import GreenletExit
 from giblets import Component, implements
 import logging
 import traceback
@@ -13,6 +13,7 @@ from melkman.db.composite import Composite, view_composites_by_subscription
 from melkman.db.remotefeed import RemoteFeed
 from melkman.db.util import batched_view_iter
 from melkman.fetch.api import request_feed_index
+from melkman.green import waitall, killall, Pool
 from melkman.messaging import MessageDispatch, always_ack, pooled
 from melkman.worker import IWorkerProcess
 
@@ -185,36 +186,50 @@ def _handle_update_subscription(message_data, message, context):
 
 
 def run_aggregator(context):
-    dispatcher = MessageDispatch(context)
-    
-    procs = []
-    worker_pool = Pool(max_size=10000)
-
-    @pooled(worker_pool)
-    @always_ack
-    def bucket_modified_handler(message_data, message):
-        try:
-            _handle_bucket_modified(message_data, message, context)
-        finally:
-            context.close()
-        
-    @pooled(worker_pool)
-    @always_ack
-    def update_subscription_handler(message_data, message):
-        try:
-            _handle_update_subscription(message_data, message, context)
-        finally:
-            context.close()
-    
-    procs.append(dispatcher.start_worker(BUCKET_MODIFIED, bucket_modified_handler))
-    procs.append(dispatcher.start_worker(UPDATE_SUBSCRIPTION, update_subscription_handler))
-    
     try:
+        worker_pool = Pool()
+
+        @pooled(worker_pool)
+        @always_ack
+        def bucket_modified_handler(message_data, message):
+            try:
+                with context:
+                    _handle_bucket_modified(message_data, message, context)
+            except GreenletExit:
+                pass
+            except: 
+                log.error("Unexpected error handling bucking modified message: %s" % traceback.format_exc())
+
+        
+        @pooled(worker_pool)
+        @always_ack
+        def update_subscription_handler(message_data, message):
+            try:
+                with context:
+                    _handle_update_subscription(message_data, message, context)
+            except GreenletExit:
+                pass
+            except: 
+                log.error("Unexpected error handling update subscription message: %s" % traceback.format_exc())
+
+        procs = []
+        with context:
+            dispatcher = MessageDispatch(context)
+            procs.append(dispatcher.start_worker(BUCKET_MODIFIED, bucket_modified_handler))
+            procs.append(dispatcher.start_worker(UPDATE_SUBSCRIPTION, update_subscription_handler))
+    
         waitall(procs)
-    except ProcExit:
+    except GreenletExit:
+        pass
+    except: 
+        log.error("Unexpected error running aggregator process: %s" % traceback.format_exc())
+    finally:
+        # stop accepting work
         killall(procs)
+        waitall(procs)
+        # stop working on existing work
         worker_pool.killall()
-        raise
+        worker_pool.waitall()
 
 class AggregatorProcess(Component):
     implements(IWorkerProcess)

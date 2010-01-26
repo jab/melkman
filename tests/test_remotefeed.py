@@ -22,13 +22,12 @@ import time
 
 from helpers import *
 
-
-def test_update_feed_repeat_index():
+@contextual
+def test_update_feed_repeat_index(ctx):
     """
     test that indexing the same content twice has no effect
     """
     from melkman.db import RemoteFeed
-    ctx = fresh_context()
     
     # create a document with a 10 entry feed
     feed_url = 'http://example.org/%s' % random_id()
@@ -56,22 +55,23 @@ def test_update_feed_repeat_index():
     feed.save()
 
     # reload...
-    feed = RemoteFeed.get(feed.id, ctx)
+    feed.reload()
     # update again with identical content,
     # should have no effect.
     updates = feed.update_from_feed(content, method='test')
     assert updates == 0
 
-
-def test_get_or_immediate_create_by_url():
+    
+    
+@contextual
+def test_get_or_immediate_create_by_url(ctx):
     """
     test that get_or_immediate_create_by_url retrieves existing feeds by url
     if they in fact exist, and creates them if they don't.
     """
     from datetime import datetime, timedelta
-    from eventlet.api import sleep
+    from eventlet import sleep
     from melkman.db.remotefeed import RemoteFeed, get_or_immediate_create_by_url
-    ctx = fresh_context()
 
     feed_url = 'http://example.org/1'
     # make sure it doesn't exist yet
@@ -93,14 +93,15 @@ def test_get_or_immediate_create_by_url():
     assert samefeed.last_modification_date == feed.last_modification_date
     assert now - samefeed.last_modification_date >= timedelta(seconds=1)
 
+    
 
-def test_update_feed_partial_repeat():
+@contextual
+def test_update_feed_partial_repeat(ctx):
     """
     test that indexing the some of same content twice only 
     updates new things.
     """
     from melkman.db import RemoteFeed
-    ctx = fresh_context()
 
     # create a document with a 10 entry feed
     feed_url = 'http://example.org/%s' % random_id()
@@ -138,12 +139,12 @@ def test_update_feed_partial_repeat():
     # make sure all the items are in the feed
     for iid in expect_ids:
         assert feed.has_news_item(iid)
+    
+    
 
-
-
-def test_item_trace_update():
+@contextual
+def test_item_trace_update(ctx):
     from melkman.db import NewsItem, RemoteFeed
-    ctx = fresh_context()
     
     def _check_item(item, info):
         for k, v in info.items():
@@ -195,13 +196,13 @@ def test_item_trace_update():
     feed.update_from_feed(feed_v3, method='test')
     feed.save()
     check_item(feed, melk_id, info3)
+    
 
-def test_view_bucket_entries_by_timestamp():
+@contextual
+def test_view_bucket_entries_by_timestamp(ctx):
     from melkman.db import NewsBucket, NewsItemRef
     from melkman.db.bucket import view_entries_by_timestamp
     from random import shuffle
-    
-    ctx = fresh_context()
     
     bucket_id = 'test_bucket'
     bucket = NewsBucket.create(ctx, bucket_id)
@@ -234,10 +235,12 @@ def test_view_bucket_entries_by_timestamp():
     assert len(sorted_items) == 100
     for i, item in enumerate(sorted_items):
         assert item.item_id == items[i][0]
-        
-def test_delete():
+    
+    
+
+@contextual
+def test_delete(ctx):
     from melkman.db import RemoteFeed, NewsItem, NewsItemRef
-    ctx = fresh_context()
 
     feed_url = 'http://example.org/feeds/1'
     dummy_feed = random_atom_feed(feed_url, 25)
@@ -267,9 +270,9 @@ def test_delete():
     for iid in items:
         assert not iid in ctx.db
 
-def test_max_history_len():
+@contextual
+def test_max_history_len(ctx):
     from melkman.db.remotefeed import RemoteFeed, MAX_HISTORY
-    ctx = fresh_context()
 
     feed_url = 'http://example.org/feeds/1'
     rf = RemoteFeed.create_from_url(feed_url, ctx)
@@ -282,3 +285,4 @@ def test_max_history_len():
         else:
             assert len(rf.update_history) == MAX_HISTORY
         assert rf.update_history[0].reason == reason
+    

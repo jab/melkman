@@ -2,7 +2,8 @@ from melkman.green import green_init
 green_init()
 
 from datetime import datetime, timedelta
-from eventlet.api import tcp_listener
+from eventlet.green import socket
+from eventlet.support.greenlets import GreenletExit
 from eventlet.wsgi import server as wsgi_server
 import os
 import time
@@ -18,7 +19,7 @@ from melkman.context import Context
 
 __all__ = ['make_db', 'fresh_context', 'data_path', 'test_yaml_file', 'random_id', 'rfc3339_date', 'melk_ids_in', 'random_atom_feed',
            'make_atom_feed', 'dummy_atom_entries', 'make_atom_entry', 'dummy_news_item', 'epeq_datetime',
-           'append_param', 'no_micro', 'TestHTTPServer', 'FileServer']
+           'append_param', 'no_micro', 'TestHTTPServer', 'FileServer', 'contextual']
 
 
 def data_path():
@@ -37,7 +38,7 @@ def fresh_context():
     ctx = Context.from_yaml(test_yaml_file())
     ctx.bootstrap(purge=True)
     return ctx
-    
+
 def random_id():
     return melk_id(nonce_str())
 
@@ -63,7 +64,8 @@ def make_atom_feed(feed_id, entries,
                     title='Some Dummy Feed',
                     timestamp=None,
                     link='http://example.org/feed',
-                    author='Jane Dough'):
+                    author='Jane Dough',
+                    hub_urls=None):
     if timestamp is None:
         timestamp = datetime.utcnow()
     updated_str = rfc3339_date(timestamp)
@@ -78,6 +80,10 @@ def make_atom_feed(feed_id, entries,
         <name>%s</name>
       </author>
     """ % (feed_id, title, link, updated_str, author)
+
+    if hub_urls is not None:
+        for hub_url in hub_urls:
+            doc += '<link rel="hub" href="%s" />' % hub_url
 
     for entry in entries:
         doc += entry
@@ -142,7 +148,14 @@ class TestHTTPServer(object):
         self.port = port
 
     def run(self):
-        wsgi_server(tcp_listener(('127.0.0.1', self.port)), self)
+        try:
+            server = socket.socket()
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind(('127.0.0.1', self.port))
+            server.listen(50)
+            wsgi_server(server, self)
+        except GreenletExit:
+            pass
 
     def __call__(self, environ, start_response):
         res = Response()
@@ -190,3 +203,20 @@ def append_param(url, k, v):
     else: 
         return '%s?%s=%s' % (url, quote_plus(k), quote_plus(v))
 
+def contextual(t):
+    from eventlet import sleep
+    from greenamqp.client_0_8 import connection
+    connection.DEBUG_LEAKS = True
+    def inner():
+        start_connections = connection.connection_count
+        ctx = fresh_context()
+        with ctx:
+            rc = t(ctx)
+        sleep(0)
+        assert len(ctx._locals_by_greenlet) == 0, 'Leaked %d greenlet storages' % len(ctx._locals_by_greenlet)
+        assert ctx._broker is None, 'Broker connection was not closed.'
+        end_connections = connection.connection_count
+        assert start_connections == end_connections, 'Leaked %d amqp connections (%d leaked in total)' % (end_connections - start_connections, end_connections)
+        return rc
+    inner.__name__ = t.__name__
+    return inner

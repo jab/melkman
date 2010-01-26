@@ -52,7 +52,9 @@ class HubInfo(Schema):
     hub_url = TextField()
     verify_token = TextField(default='')
     secret = TextField(default='')
-    enabled = BooleanField(default=False)
+    subscribed = BooleanField(default=False) # active subscription
+    next_sub_time = DateTimeField()
+    enabled = BooleanField(default=True) # pubsub enabled for this feed
 
 
 MAX_HISTORY = 10
@@ -103,6 +105,10 @@ class RemoteFeed(NewsBucket):
         updated = _update_feed(self, content, self._context, method)
         self._updated_news_items.update(updated)
         return len(updated)
+
+    def reload(self):
+        NewsBucket.reload(self)
+        self._updated_news_items = {}
 
     def save(self):
         try:

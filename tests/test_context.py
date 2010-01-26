@@ -1,7 +1,6 @@
 import os
 from helpers import *
 
-
 def test_context_bootstrap_plugins():
     from giblets import Component, implements
     from melkman.context import Context, IRunDuringBootstrap
@@ -19,10 +18,9 @@ def test_context_bootstrap_plugins():
         'plugins': [{'pattern': "test_context.FooComponent", "enabled": True}]
     }
     ctx = Context.from_dict(config, defaults=Context.from_yaml(test_yaml_file()).config)
-    
-    ctx.bootstrap(purge=False)
-    
-    assert FooComponent.did_bootstrap == 1
+    with ctx:
+        ctx.bootstrap(purge=False)    
+        assert FooComponent.did_bootstrap == 1
     
 def test_context_components():
 
@@ -59,12 +57,12 @@ def test_context_components():
     """
     
     ctx = Context.from_json(config)
+    with ctx:
+        bazer = BazHolder(ctx.component_manager)
     
-    bazer = BazHolder(ctx.component_manager)
-    
-    # check that only the enabled components came through
-    assert len(bazer.bazoo) == 1
-    assert isinstance(bazer.bazoo[0], FooComponent)
+        # check that only the enabled components came through
+        assert len(bazer.bazoo) == 1
+        assert isinstance(bazer.bazoo[0], FooComponent)
 
-    # check that the component was configured with the context
-    assert bazer.bazoo[0].context == ctx
+        # check that the component was configured with the context
+        assert bazer.bazoo[0].context == ctx

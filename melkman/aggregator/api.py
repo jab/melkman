@@ -49,5 +49,3 @@ class AggregatorSetup(Component):
             dispatch.declare(t)
             if purge == True:
                 dispatch.clear(t)
-        
-        context.close()

@@ -131,7 +131,8 @@ class ServeCommand(Component):
     @assert_no_args
     def __call__(self, context, args):
         from giblets import Component, ExtensionPoint
-        from eventlet.proc import spawn, waitall
+        from eventlet import spawn
+        from melkman.green import waitall
         from melkman.worker import IWorkerProcess
 
         class ConfiguredWorkers(Component):

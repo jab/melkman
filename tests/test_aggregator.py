@@ -5,14 +5,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-def test_modified_updates_composite():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+@contextual
+def test_modified_updates_composite(ctx):
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
     
     b = []
@@ -43,7 +42,7 @@ def test_modified_updates_composite():
     
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
     
     assert c[0].has_news_item(id1)
     assert not c[1].has_news_item(id1)
@@ -57,7 +56,7 @@ def test_modified_updates_composite():
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
     
     assert not c[0].has_news_item(id2)
     assert c[1].has_news_item(id2)
@@ -71,23 +70,23 @@ def test_modified_updates_composite():
 
     # refresh them from the db...
     for i in range(3):
-        c[i] = Composite.get(c[i].id, ctx)
+        c[i].reload()
 
     assert not c[0].has_news_item(id3)
     assert not c[1].has_news_item(id3)
     assert not c[2].has_news_item(id3)
 
     agg.kill()
-    ctx.close()
+    agg.wait()
     
-def test_sub_loop_sane():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+
+@contextual
+def test_sub_loop_sane(ctx):
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
 
     # create two composites and subscribe them 
@@ -113,8 +112,8 @@ def test_sub_loop_sane():
     sleep(1)
 
     # refresh
-    c1 = Composite.get(c1.id, ctx)
-    c2 = Composite.get(c2.id, ctx)
+    c1.reload()
+    c2.reload()
 
     assert len(c1.entries) == 20
     assert len(c2.entries) == 20
@@ -128,17 +127,16 @@ def test_sub_loop_sane():
     sleep(1)
 
     agg.kill()
-    ctx.close()
+    agg.wait()
 
 
-def test_init_subscription():
-    from eventlet.api import sleep
-    from eventlet.proc import spawn, waitall
+@contextual
+def test_init_subscription(ctx):
+    from eventlet import sleep, spawn
     from melkman.aggregator.worker import run_aggregator
     from melkman.db.bucket import NewsBucket
     from melkman.db.composite import Composite
 
-    ctx = fresh_context()
     agg = spawn(run_aggregator, ctx)
 
     c = Composite.create(ctx)
@@ -157,9 +155,10 @@ def test_init_subscription():
     c.save()
     sleep(.5)
 
-    c = Composite.get(c.id, ctx)
+    c.reload()
     for eid in entries:
         assert c.has_news_item(eid)
 
     agg.kill()
-    ctx.close()
+    agg.wait()
+    
