@@ -303,7 +303,7 @@ def update_pubsub_state(feed, context):
         except:
             log.warn("Error unsubscribing from current hub: %s" % 
                      traceback.format_exc())
-        feed = RemoteFeed.get(feed.id, context) # refresh
+        feed.reload()
 
     # if it is time to resubscribe to the current hub, try to 
     # resubscribe
