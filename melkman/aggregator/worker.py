@@ -24,7 +24,7 @@ def _handle_bucket_modified(message_data, message, context):
     main aggregator handler for the 'bucket_modified' message
     """
 
-    # the 'bucket' was a Composite, and there are there are new
+    # the 'bucket' was a Composite, and there are new
     # subscriptions to update.
     if ('Composite' in message_data.get('bucket_types', []) and 
         len(message_data.get('new_subscriptions', [])) > 0):
@@ -43,7 +43,7 @@ def _handle_new_subscriptions(message_data, message, context):
     try:
         new_subscriptions = message_data.get('new_subscriptions', [])
         if len(new_subscriptions) == 0:
-            log.warn("Ignoring init_subscription with no new subscriptions ...")
+            log.warn("Ignoring init_subscription with no new subscriptions...")
             return
 
         cid = message_data.get('bucket_id', None)
@@ -80,7 +80,7 @@ def _handle_new_subscriptions(message_data, message, context):
             try:
                 log.debug("init subscription %s -> %s" % (sub, cid))
                 updates += composite.init_subscription(sub)
-                sleep(0) # yeild control
+                sleep(0) # yield control
             except:
                 log.error("Error initializing subscription %s -> %s: %s" % (sub, cid, traceback.format_exc()))
         if updates > 0:
@@ -109,7 +109,7 @@ def _notify_subscribers(message_data, message, context):
     try:
         bucket_id = message_data.get('bucket_id', None)
         if bucket_id is None:
-            log.warn("Ignorning malformed bucket_modified message... (no bucket_id)")
+            log.warn("Ignoring malformed bucket_modified message... (no bucket_id)")
             message.ack()
             return
 

@@ -92,7 +92,7 @@ class EventBus(object):
     def add_listener(self, channel, callback):
         """
         add a callback that is triggered whenever a message
-        is send to the channel specified. 
+        is sent to the channel specified. 
         
         callback - single argument function accepting the event.
         """
