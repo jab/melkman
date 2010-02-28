@@ -34,7 +34,7 @@ setup(
     url="http://github.com/ltucker/melkman",
     install_requires=['couchdb',
                       'carrot>=0.6',
-                      'eventlet>=0.9.3',
+                      'eventlet==0.9.3',
                       'giblets',
                       'greenamqp',
                       'httplib2',
