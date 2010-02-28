@@ -1,8 +1,8 @@
--e git+git://github.com/ltucker/melkman.git#egg=melkman
--e git+git://github.com/ltucker/melk.util.git#egg=melk.util
--e git+git://github.com/ltucker/giblets.git#egg=giblets
--e git+git://github.com/ltucker/feedparser.git#egg=feedparser
--e git+git://github.com/ltucker/greenamqp.git#egg=greenamqp
+-e git+git://github.com/jab/melkman.git#egg=melkman
+-e git+git://github.com/jab/melk.util.git#egg=melk.util
+-e git+git://github.com/jab/giblets.git#egg=giblets
+-e git+git://github.com/jab/feedparser.git#egg=feedparser
+-e git+git://github.com/jab/greenamqp.git#egg=greenamqp
 -e hg+https://httplib2.googlecode.com/hg#egg=httplib2
 
 nose

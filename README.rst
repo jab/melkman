@@ -38,7 +38,7 @@ Now install melkman and its dependencies into a new virtualenv::
     ...
     $ cd melkenv
     $ source bin/activate
-    (melkenv)$ pip install -r http://github.com/ltucker/melkman/raw/master/requirements.txt
+    (melkenv)$ pip install -r http://github.com/jab/melkman/raw/master/requirements.txt
     ...
 
 This will install melkman as an editable package in melkenv/src/melkman.
